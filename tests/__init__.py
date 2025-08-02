@@ -1,0 +1,1 @@
+"""Test package for Gemini CLI Python."""
