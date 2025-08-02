@@ -40,6 +40,65 @@ from .turn import Message, MessageRole, MessagePart, Turn
 
 logger = logging.getLogger(__name__)
 
+
+def convert_json_schema_to_gemini_schema(json_schema: Dict[str, Any]) -> genai.protos.Schema:
+    """Convert JSON schema to Gemini protobuf Schema format."""
+    schema_type = genai.protos.Type.OBJECT  # Default to object
+    
+    # Map JSON schema types to Gemini types
+    if json_schema.get("type") == "string":
+        schema_type = genai.protos.Type.STRING
+    elif json_schema.get("type") == "integer":
+        schema_type = genai.protos.Type.INTEGER
+    elif json_schema.get("type") == "number":
+        schema_type = genai.protos.Type.NUMBER
+    elif json_schema.get("type") == "boolean":
+        schema_type = genai.protos.Type.BOOLEAN
+    elif json_schema.get("type") == "array":
+        schema_type = genai.protos.Type.ARRAY
+    elif json_schema.get("type") == "object":
+        schema_type = genai.protos.Type.OBJECT
+    
+    # Create base schema
+    schema = genai.protos.Schema(
+        type=schema_type,
+        description=json_schema.get("description", "")
+    )
+    
+    # Handle object properties
+    if json_schema.get("type") == "object" and "properties" in json_schema:
+        properties = {}
+        for prop_name, prop_schema in json_schema["properties"].items():
+            properties[prop_name] = convert_json_schema_to_gemini_schema(prop_schema)
+        schema.properties.update(properties)
+        
+        # Handle required fields
+        if "required" in json_schema:
+            schema.required.extend(json_schema["required"])
+    
+    return schema
+
+
+def convert_function_schemas_to_gemini_tools(function_schemas: List[Dict[str, Any]]) -> List[genai.protos.Tool]:
+    """Convert function schemas to Gemini Tool protobuf format."""
+    tools = []
+    
+    for func_schema in function_schemas:
+        # Create function declaration
+        func_declaration = genai.protos.FunctionDeclaration(
+            name=func_schema["name"],
+            description=func_schema["description"],
+            parameters=convert_json_schema_to_gemini_schema(func_schema["parameters"])
+        )
+        
+        # Create tool with this function
+        tool = genai.protos.Tool(
+            function_declarations=[func_declaration]
+        )
+        tools.append(tool)
+    
+    return tools
+
 # Re-export common types for backward compatibility
 ContentGenerator = BaseContentGenerator
 
@@ -178,7 +237,8 @@ class GeminiContentGenerator(BaseContentGenerator):
     async def generate_content(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> GenerateContentResponse:
         """Generate content using Gemini API."""
         if not self._initialized:
@@ -190,7 +250,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             
             # Execute with retry logic
             response = await self.retry_manager.retry(
-                lambda: self._generate_content_impl(gemini_messages, config),
+                lambda: self._generate_content_impl(gemini_messages, config, tools),
                 model=self.config.model
             )
             
@@ -204,7 +264,8 @@ class GeminiContentGenerator(BaseContentGenerator):
     async def generate_content_stream(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Generate content with streaming response."""
         if not self._initialized:
@@ -216,7 +277,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             
             # Execute streaming with retry logic
             async def stream_generator():
-                async for chunk in self._generate_content_stream_impl(gemini_messages, config):
+                async for chunk in self._generate_content_stream_impl(gemini_messages, config, tools):
                     yield chunk
             
             # Note: Retry logic for streaming is more complex and may need special handling
@@ -271,51 +332,107 @@ class GeminiContentGenerator(BaseContentGenerator):
         }
         return context_limits.get(self.config.model, 32768)
     
+    def set_tools(self, function_declarations: List[Dict[str, Any]]) -> None:
+        """
+        Set tools for this content generator.
+        
+        Args:
+            function_declarations: List of function declarations in our standard format
+        """
+        if function_declarations:
+            # Convert to Gemini's native tool format
+            self.config.tools = convert_function_schemas_to_gemini_tools(function_declarations)
+        else:
+            self.config.tools = None
+    
+    def get_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """Get the currently configured tools."""
+        return self.config.tools
+    
     async def _generate_content_impl(
         self,
         gemini_messages: List[Dict[str, Any]],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> GenerateContentResponse:
         """Internal implementation of content generation."""
         try:
-            # For now, handle simple text generation
-            if gemini_messages:
-                # Extract text from the last user message
-                last_message = gemini_messages[-1]
-                if last_message.get("role") == "user" and "parts" in last_message:
-                    text_parts = []
-                    for part in last_message["parts"]:
-                        if isinstance(part, dict) and "text" in part:
-                            text_parts.append(part["text"])
-                    
-                    if text_parts:
-                        prompt = " ".join(text_parts)
-                        
-                        # Generate response
-                        response = await asyncio.to_thread(
-                            self._client.generate_content,
-                            prompt
-                        )
-                        
-                        # Convert to our response format
-                        return GenerateContentResponse(
-                            candidates=[
-                                GenerationCandidate(
-                                    content={
-                                        "role": "model",
-                                        "parts": [{"text": response.text}]
-                                    },
-                                    finish_reason=getattr(response.candidates[0], 'finish_reason', None) if response.candidates else None
-                                )
-                            ],
-                            usage_metadata=UsageMetadata(
-                                prompt_token_count=getattr(response.usage_metadata, 'prompt_token_count', 0) if hasattr(response, 'usage_metadata') else 0,
-                                candidates_token_count=getattr(response.usage_metadata, 'candidates_token_count', 0) if hasattr(response, 'usage_metadata') else 0,
-                                total_token_count=getattr(response.usage_metadata, 'total_token_count', 0) if hasattr(response, 'usage_metadata') else 0
-                            )
-                        )
+            if not gemini_messages:
+                return GenerateContentResponse()
             
-            return GenerateContentResponse()
+            # Prepare generation config
+            generation_config = {
+                "temperature": self.config.temperature,
+                "max_output_tokens": self.config.max_tokens
+            }
+            
+            # Override with runtime config if provided
+            if config:
+                generation_config.update(config)
+            
+            # Prepare tools if available (runtime tools take precedence)
+            effective_tools = None
+            if tools is not None:
+                # Use runtime provided tools
+                effective_tools = convert_function_schemas_to_gemini_tools(tools)
+            elif self.config.tools:
+                # Use config tools as fallback
+                effective_tools = self.config.tools
+            
+            # Generate response using the configured model
+            response = await asyncio.to_thread(
+                self._client.generate_content,
+                gemini_messages,
+                generation_config=generation_config,
+                tools=effective_tools,
+                safety_settings=self.config.safety_settings
+            )
+            
+            # Extract parts from the response (including function calls)
+            parts = []
+            if response.parts:
+                for part in response.parts:
+                    if hasattr(part, 'text') and part.text:
+                        parts.append({"text": part.text})
+                    elif hasattr(part, 'function_call') and part.function_call:
+                        # Convert function call to dictionary format
+                        function_call_dict = {
+                            "name": part.function_call.name,
+                            "args": {}
+                        }
+                        # Extract arguments from the function call
+                        if hasattr(part.function_call, 'args') and part.function_call.args:
+                            for key, value in part.function_call.args.items():
+                                # Convert protobuf Value to Python types
+                                if hasattr(value, 'string_value'):
+                                    function_call_dict["args"][key] = value.string_value
+                                elif hasattr(value, 'number_value'):
+                                    function_call_dict["args"][key] = value.number_value
+                                elif hasattr(value, 'bool_value'):
+                                    function_call_dict["args"][key] = value.bool_value
+                                else:
+                                    # Fallback for other types
+                                    function_call_dict["args"][key] = str(value)
+                        
+                        parts.append({"function_call": function_call_dict})
+                        
+            # Convert to our response format
+            return GenerateContentResponse(
+                candidates=[
+                    GenerationCandidate(
+                        content={
+                            "role": "model",
+                            "parts": parts
+                        },
+                        finish_reason=getattr(response.candidates[0], 'finish_reason', None) if response.candidates else None
+                    )
+                ],
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=getattr(response.usage_metadata, 'prompt_token_count', 0) if hasattr(response, 'usage_metadata') else 0,
+                    candidates_token_count=getattr(response.usage_metadata, 'candidates_token_count', 0) if hasattr(response, 'usage_metadata') else 0,
+                    total_token_count=getattr(response.usage_metadata, 'total_token_count', 0) if hasattr(response, 'usage_metadata') else 0
+                )
+            )
             
         except Exception as e:
             raise classify_error(e)
@@ -323,40 +440,108 @@ class GeminiContentGenerator(BaseContentGenerator):
     async def _generate_content_stream_impl(
         self,
         gemini_messages: List[Dict[str, Any]],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Internal implementation of streaming content generation."""
         try:
-            if gemini_messages:
-                # Extract text from the last user message
-                last_message = gemini_messages[-1]
-                if last_message.get("role") == "user" and "parts" in last_message:
-                    text_parts = []
-                    for part in last_message["parts"]:
-                        if isinstance(part, dict) and "text" in part:
-                            text_parts.append(part["text"])
+            if not gemini_messages:
+                return
+            
+            # Prepare generation config
+            generation_config = {
+                "temperature": self.config.temperature,
+                "max_output_tokens": self.config.max_tokens
+            }
+            
+            # Override with runtime config if provided
+            if config:
+                generation_config.update(config)
+            
+            # Prepare tools if available (runtime tools take precedence)
+            effective_tools = None
+            if tools is not None:
+                # Use runtime provided tools
+                effective_tools = convert_function_schemas_to_gemini_tools(tools)
+            elif self.config.tools:
+                # Use config tools as fallback
+                effective_tools = self.config.tools
+            
+            # Generate streaming response
+            def _stream_generate():
+                return self._client.generate_content(
+                    gemini_messages,
+                    generation_config=generation_config,
+                    tools=effective_tools,
+                    safety_settings=self.config.safety_settings,
+                    stream=True
+                )
+            
+            stream = await asyncio.to_thread(_stream_generate)
+            
+            for chunk in stream:
+                # Handle streaming chunks that can contain text OR function calls
+                parts = []
+                
+                # Safely check for text content without triggering conversion errors
+                try:
+                    # Only access .text if the chunk doesn't have function calls
+                    if hasattr(chunk, 'candidates') and chunk.candidates:
+                        candidate = chunk.candidates[0]
+                        if hasattr(candidate, 'content') and candidate.content:
+                            if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                                # Process each part individually
+                                for part in candidate.content.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        parts.append({"text": part.text})
+                                    elif hasattr(part, 'function_call') and part.function_call:
+                                        # Convert function call to our format
+                                        function_call_dict = {
+                                            "name": part.function_call.name,
+                                            "args": {}
+                                        }
+                                        # Extract arguments from the function call
+                                        if hasattr(part.function_call, 'args') and part.function_call.args:
+                                            for key, value in part.function_call.args.items():
+                                                # Convert protobuf Value to Python types
+                                                function_call_dict["args"][key] = value
+                                        
+                                        parts.append({"function_call": function_call_dict})
                     
-                    if text_parts:
-                        prompt = " ".join(text_parts)
-                        
-                        # Generate streaming response
-                        def _stream_generate():
-                            return self._client.generate_content(prompt, stream=True)
-                        
-                        stream = await asyncio.to_thread(_stream_generate)
-                        
-                        for chunk in stream:
-                            if chunk.text:
-                                yield GenerateContentResponse(
-                                    candidates=[
-                                        GenerationCandidate(
-                                            content={
-                                                "role": "model",
-                                                "parts": [{"text": chunk.text}]
-                                            }
-                                        )
-                                    ]
-                                )
+                    # Fallback: try to get text only if no parts were found and no function calls
+                    if not parts and hasattr(chunk, 'text'):
+                        text_content = getattr(chunk, 'text', None)
+                        if text_content:
+                            parts.append({"text": text_content})
+                            
+                except Exception as e:
+                    # If we get a function calling error, the chunk likely contains function calls
+                    # Try to extract them directly from the chunk structure
+                    logger.debug(f"Error accessing chunk content: {e}")
+                    if hasattr(chunk, 'candidates') and chunk.candidates:
+                        candidate = chunk.candidates[0]
+                        if hasattr(candidate, 'content') and candidate.content:
+                            if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                                for part in candidate.content.parts:
+                                    if hasattr(part, 'function_call') and part.function_call:
+                                        function_call_dict = {
+                                            "name": part.function_call.name,
+                                            "args": dict(part.function_call.args)
+                                        }
+                                        parts.append({"function_call": function_call_dict})
+                
+                # Only yield response if we have parts to return
+                if parts:
+                    yield GenerateContentResponse(
+                        candidates=[
+                            GenerationCandidate(
+                                content={
+                                    "role": "model",
+                                    "parts": parts
+                                }
+                            )
+                        ]
+                    )
                                 
         except Exception as e:
             raise classify_error(e)
@@ -392,6 +577,25 @@ class GeminiContentGenerator(BaseContentGenerator):
                 gemini_messages.append(gemini_message)
         
         return gemini_messages
+    
+    def set_tools(self, tools: List[Dict[str, Any]]) -> None:
+        """Set the available tools for function calling, converting from JSON to Gemini protobuf format."""
+        if not tools:
+            self.config.tools = None
+            return
+        
+        # Extract function schemas from the tools format
+        function_schemas = []
+        for tool_group in tools:
+            if "functionDeclarations" in tool_group:
+                function_schemas.extend(tool_group["functionDeclarations"])
+        
+        if function_schemas:
+            # Convert JSON schemas to Gemini protobuf format
+            gemini_tools = convert_function_schemas_to_gemini_tools(function_schemas)
+            self.config.tools = gemini_tools
+        else:
+            self.config.tools = None
 
 
 # Factory functions

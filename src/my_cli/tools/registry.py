@@ -7,13 +7,22 @@ mirroring the functionality of the original Gemini CLI's ToolRegistry.
 
 import asyncio
 import importlib
+import importlib.util
 import inspect
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Any, Set
 import logging
 from dataclasses import dataclass
 
-from .base import Tool, BaseTool, ToolResult
+from .types import Tool
+from .base import BaseTool, ToolResult
+from .core import (
+    ReadFileTool,
+    ShellTool,
+    ListDirectoryTool,
+    WriteFileTool,
+    EditFileTool
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,13 +206,17 @@ class ToolRegistry:
     async def execute_tool(
         self,
         name: str,
-        params: Dict[str, Any]
+        params: Dict[str, Any],
+        abort_signal: Optional[asyncio.Event] = None,
+        update_callback: Optional[callable] = None
     ) -> Optional[ToolResult]:
         """Execute a tool by name.
         
         Args:
             name: Tool name
             params: Tool parameters
+            abort_signal: Optional abort signal
+            update_callback: Optional callback for live updates
             
         Returns:
             Tool result or None if tool not found
@@ -214,31 +227,43 @@ class ToolRegistry:
             return None
         
         try:
-            return await tool.execute(params)
+            if abort_signal is None:
+                abort_signal = asyncio.Event()
+            
+            return await tool.execute(params, abort_signal, update_callback)
         except Exception as e:
             logger.error(f"Error executing tool '{name}': {e}")
             return None
     
-    async def discover_builtin_tools(self) -> int:
-        """Discover and register built-in tools.
+    async def discover_builtin_tools(self, config=None) -> int:
+        """Discover and register built-in core tools.
         
+        Args:
+            config: Optional MyCliConfig instance
+            
         Returns:
             Number of tools discovered
         """
         discovered_count = 0
         
-        # Import and register built-in tools
-        # This would be expanded to include actual built-in tools
+        # Register the 5 core tools
         builtin_tools = [
-            # Add built-in tool classes here
-            # Example: FileReadTool, FileWriteTool, etc.
+            (ReadFileTool, "Reads file contents with pagination support"),
+            (ShellTool, "Executes shell commands with safety confirmation"),
+            (ListDirectoryTool, "Lists directory contents with filtering"),
+            (WriteFileTool, "Writes files with atomic operations and backup"),
+            (EditFileTool, "Edits files with diff preview and precise modifications")
         ]
         
-        for tool_class in builtin_tools:
-            if self.register_tool_class(tool_class, source="builtin"):
-                discovered_count += 1
+        for tool_class, description in builtin_tools:
+            try:
+                if self.register_tool_class(tool_class, source="builtin", config=config):
+                    discovered_count += 1
+                    logger.info(f"Registered core tool: {tool_class.__name__} - {description}")
+            except Exception as e:
+                logger.error(f"Failed to register core tool {tool_class.__name__}: {e}")
         
-        logger.info(f"Discovered {discovered_count} built-in tools")
+        logger.info(f"Discovered {discovered_count} built-in core tools")
         return discovered_count
     
     async def discover_tools_from_directory(

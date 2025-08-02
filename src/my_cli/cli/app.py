@@ -66,11 +66,25 @@ def chat_command(
     message: Optional[str] = typer.Argument(None, help="Message to send to AI"),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="AI model to use"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Enable/disable streaming responses"),
+    tools: bool = typer.Option(True, "--tools/--no-tools", help="Enable/disable AI tool usage"),
+    auto_confirm: bool = typer.Option(False, "--auto-confirm", help="Auto-confirm all tool executions"),
 ) -> None:
     """Start a chat session with AI or send a single message."""
     
     def _run_async_chat():
-        return asyncio.run(_async_chat_command(message, model, stream))
+        if tools:
+            # Use enhanced chat with tools
+            from .enhanced_chat import enhanced_chat_command
+            return asyncio.run(enhanced_chat_command(
+                message=message,
+                model=model,
+                stream=stream,
+                auto_confirm_tools=auto_confirm,
+                enable_tools=tools
+            ))
+        else:
+            # Use basic chat without tools
+            return asyncio.run(_async_chat_command(message, model, stream))
     
     _run_async_chat()
 

@@ -1,176 +1,34 @@
-"""
-Base tool system for My CLI.
+"""Enhanced base tool system for My CLI Phase 2.2.
 
 This module provides the core interfaces and base classes for implementing tools,
-mirroring the functionality of the original Gemini CLI's tool system.
+following the architecture of the original Gemini CLI's tool system.
 """
 
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, Union
-from dataclasses import dataclass
-from pathlib import Path
+from typing import Any, Dict, List, Optional, Union, Callable, TypeVar
 import asyncio
+import os
+from pathlib import Path
 
-from pydantic import BaseModel, Field
+from .types import (
+    Icon,
+    Tool,
+    ToolLocation,
+    ToolResult,
+    ToolCallConfirmationDetails,
+    ToolConfirmationOutcome
+)
+# Avoid circular import - config will be passed as parameter
 
-
-class Icon(Enum):
-    """Icons for tools in the UI."""
-    FILE_SEARCH = "file_search"
-    FOLDER = "folder"
-    GLOBE = "globe"
-    HAMMER = "hammer"
-    LIGHT_BULB = "light_bulb"
-    PENCIL = "pencil"
-    REGEX = "regex"
-    TERMINAL = "terminal"
-
-
-@dataclass
-class ToolLocation:
-    """Represents a file system location that a tool will affect."""
-    path: Path
-    line: Optional[int] = None
+P = TypeVar('P', bound=Dict[str, Any])  # Parameter type
 
 
-class ToolConfirmationOutcome(Enum):
-    """Outcomes for tool confirmation dialogs."""
-    PROCEED_ONCE = "proceed_once"
-    PROCEED_ALWAYS = "proceed_always"
-    PROCEED_ALWAYS_SERVER = "proceed_always_server"
-    PROCEED_ALWAYS_TOOL = "proceed_always_tool"
-    MODIFY_WITH_EDITOR = "modify_with_editor"
-    CANCEL = "cancel"
-
-
-@dataclass
-class ToolConfirmationDetails:
-    """Details for tool execution confirmation."""
-    type: str
-    title: str
-    description: str
-    command: Optional[str] = None
-    file_path: Optional[Path] = None
-    urls: Optional[List[str]] = None
-
-
-class ToolResult(BaseModel):
-    """Result of a tool execution."""
-    
-    summary: Optional[str] = Field(
-        default=None,
-        description="A short, one-line summary of the tool's action and result"
-    )
-    
-    content: str = Field(
-        description="Content for LLM consumption - factual outcome of execution"
-    )
-    
-    display: str = Field(
-        description="Markdown string for user display"
-    )
-    
-    success: bool = Field(
-        default=True,
-        description="Whether the tool execution was successful"
-    )
-    
-    error: Optional[str] = Field(
-        default=None,
-        description="Error message if execution failed"
-    )
-
-
-class Tool(Protocol):
+class BaseTool(Tool):
     """
-    Protocol defining the interface that all tools must implement.
-    
-    This mirrors the TypeScript Tool interface from the original Gemini CLI.
-    """
-    
-    name: str
-    display_name: str
-    description: str
-    icon: Icon
-    is_output_markdown: bool
-    can_update_output: bool
-    
-    def validate_params(self, params: Dict[str, Any]) -> Optional[str]:
-        """
-        Validate the parameters for the tool.
-        
-        Args:
-            params: Parameters to validate
-            
-        Returns:
-            Error message string if invalid, None if valid
-        """
-        ...
-    
-    def get_description(self, params: Dict[str, Any]) -> str:
-        """
-        Get a pre-execution description of what the tool will do.
-        
-        Args:
-            params: Parameters for the tool execution
-            
-        Returns:
-            Markdown string describing what the tool will do
-        """
-        ...
-    
-    def get_tool_locations(self, params: Dict[str, Any]) -> List[ToolLocation]:
-        """
-        Determine what file system paths the tool will affect.
-        
-        Args:
-            params: Parameters for the tool execution
-            
-        Returns:
-            List of file system locations that will be affected
-        """
-        ...
-    
-    async def should_confirm_execute(
-        self, 
-        params: Dict[str, Any]
-    ) -> Union[ToolConfirmationDetails, bool]:
-        """
-        Determine if the tool should prompt for confirmation before execution.
-        
-        Args:
-            params: Parameters for the tool execution
-            
-        Returns:
-            ToolConfirmationDetails if confirmation needed, False otherwise
-        """
-        ...
-    
-    async def execute(
-        self, 
-        params: Dict[str, Any],
-        update_callback: Optional[callable] = None
-    ) -> ToolResult:
-        """
-        Execute the tool with the given parameters.
-        
-        Args:
-            params: Parameters for the tool execution
-            update_callback: Optional callback for streaming updates
-            
-        Returns:
-            Result of the tool execution
-        """
-        ...
-
-
-class BaseTool(ABC):
-    """
-    Base implementation for tools with common functionality.
+    Enhanced base implementation for tools with common functionality.
     
     This provides a foundation that concrete tools can build upon,
-    similar to the BaseTool class in the original implementation.
+    following the original Gemini CLI's BaseTool pattern.
     """
     
     def __init__(
@@ -179,33 +37,41 @@ class BaseTool(ABC):
         display_name: str,
         description: str,
         icon: Icon,
+        schema: Dict[str, Any],
         is_output_markdown: bool = True,
-        can_update_output: bool = False
+        can_update_output: bool = False,
+        config: Optional[Any] = None
     ):
-        self.name = name
-        self.display_name = display_name
-        self.description = description
-        self.icon = icon
-        self.is_output_markdown = is_output_markdown
-        self.can_update_output = can_update_output
+        super().__init__(
+            name=name,
+            display_name=display_name,
+            description=description,
+            icon=icon,
+            schema=schema,
+            is_output_markdown=is_output_markdown,
+            can_update_output=can_update_output
+        )
+        self.config = config
     
-    def validate_params(self, params: Dict[str, Any]) -> Optional[str]:
+    def validate_tool_params(self, params: P) -> Optional[str]:
         """
-        Default parameter validation.
+        Default parameter validation using JSON schema.
         
-        Override this method in concrete tools for specific validation logic.
+        Override this method in concrete tools for additional validation.
         """
+        # Basic type checking could be done here
+        # For now, assume params are valid if they match expected structure
         return None
     
-    def get_description(self, params: Dict[str, Any]) -> str:
+    def get_description(self, params: P) -> str:
         """
         Default description generator.
         
         Override this method in concrete tools for better descriptions.
         """
-        return f"Execute {self.display_name} with parameters: {params}"
+        return f"Execute {self.display_name}"
     
-    def get_tool_locations(self, params: Dict[str, Any]) -> List[ToolLocation]:
+    def tool_locations(self, params: P) -> List[ToolLocation]:
         """
         Default implementation returns empty list.
         
@@ -214,9 +80,10 @@ class BaseTool(ABC):
         return []
     
     async def should_confirm_execute(
-        self, 
-        params: Dict[str, Any]
-    ) -> Union[ToolConfirmationDetails, bool]:
+        self,
+        params: P,
+        abort_signal: asyncio.Event
+    ) -> Union[ToolCallConfirmationDetails, bool]:
         """
         Default implementation - no confirmation required.
         
@@ -226,9 +93,10 @@ class BaseTool(ABC):
     
     @abstractmethod
     async def execute(
-        self, 
-        params: Dict[str, Any],
-        update_callback: Optional[callable] = None
+        self,
+        params: P,
+        abort_signal: asyncio.Event,
+        update_callback: Optional[Callable[[str], None]] = None
     ) -> ToolResult:
         """
         Abstract method that concrete tools must implement.
@@ -239,9 +107,8 @@ class BaseTool(ABC):
     
     def create_result(
         self,
-        content: str,
-        display: Optional[str] = None,
-        summary: Optional[str] = None,
+        llm_content: Union[str, List[Dict[str, Any]]],
+        return_display: Optional[str] = None,
         success: bool = True,
         error: Optional[str] = None
     ) -> ToolResult:
@@ -249,9 +116,8 @@ class BaseTool(ABC):
         Helper method to create a ToolResult.
         
         Args:
-            content: Content for LLM consumption
-            display: Display content (defaults to content if not provided)
-            summary: Optional summary
+            llm_content: Content for LLM consumption
+            return_display: Display content for user
             success: Whether execution was successful
             error: Error message if failed
             
@@ -259,12 +125,39 @@ class BaseTool(ABC):
             ToolResult instance
         """
         return ToolResult(
-            content=content,
-            display=display or content,
-            summary=summary,
+            llm_content=llm_content,
+            return_display=return_display,
             success=success,
             error=error
         )
+    
+    def _validate_workspace_path(self, file_path: str) -> Optional[str]:
+        """
+        Validate that a file path is within the workspace.
+        
+        Args:
+            file_path: Path to validate
+            
+        Returns:
+            Error message if invalid, None if valid
+        """
+        if not file_path:
+            return "File path cannot be empty"
+        
+        if not os.path.isabs(file_path):
+            return f"File path must be absolute: {file_path}"
+        
+        # Check if path is within workspace (if config available)
+        if self.config:
+            workspace_dirs = getattr(self.config, 'workspace_dirs', [])
+            if workspace_dirs:
+                path_obj = Path(file_path)
+                workspace_paths = [Path(d) for d in workspace_dirs]
+                
+                if not any(path_obj.is_relative_to(wp) for wp in workspace_paths):
+                    return f"File path must be within workspace directories: {workspace_dirs}"
+        
+        return None
 
 
 class ReadOnlyTool(BaseTool):
@@ -274,8 +167,16 @@ class ReadOnlyTool(BaseTool):
     These tools typically don't require confirmation from the user.
     """
     
-    def __init__(self, name: str, display_name: str, description: str, icon: Icon):
-        super().__init__(name, display_name, description, icon)
+    def __init__(
+        self,
+        name: str,
+        display_name: str,
+        description: str,
+        icon: Icon,
+        schema: Dict[str, Any],
+        config: Optional[Any] = None
+    ):
+        super().__init__(name, display_name, description, icon, schema, config=config)
 
 
 class ModifyingTool(BaseTool):
@@ -285,26 +186,35 @@ class ModifyingTool(BaseTool):
     These tools typically require user confirmation before execution.
     """
     
-    def __init__(self, name: str, display_name: str, description: str, icon: Icon):
-        super().__init__(name, display_name, description, icon)
+    def __init__(
+        self,
+        name: str,
+        display_name: str,
+        description: str,
+        icon: Icon,
+        schema: Dict[str, Any],
+        config: Optional[Any] = None
+    ):
+        super().__init__(name, display_name, description, icon, schema, config=config)
     
     async def should_confirm_execute(
-        self, 
-        params: Dict[str, Any]
-    ) -> Union[ToolConfirmationDetails, bool]:
+        self,
+        params: P,
+        abort_signal: asyncio.Event
+    ) -> Union[ToolCallConfirmationDetails, bool]:
         """
         Default confirmation for modifying tools.
         
         Override this method for custom confirmation logic.
         """
-        locations = self.get_tool_locations(params)
+        locations = self.tool_locations(params)
         if locations:
-            file_paths = [str(loc.path) for loc in locations]
+            file_paths = [loc.path for loc in locations]
             description = f"This will modify the following files: {', '.join(file_paths)}"
         else:
             description = f"This will execute: {self.get_description(params)}"
         
-        return ToolConfirmationDetails(
+        return ToolCallConfirmationDetails(
             type="modify",
             title=f"Confirm {self.display_name}",
             description=description

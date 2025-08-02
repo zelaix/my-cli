@@ -5,6 +5,7 @@ This module defines the core interfaces and types that allow the CLI to work
 with multiple AI model providers (Gemini, Kimi, OpenAI, etc.) in a unified way.
 """
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -170,9 +171,33 @@ class GenerateContentResponse(BaseModel):
         return ""
     
     @property
+    def tool_calls(self) -> List[Dict[str, Any]]:
+        """Get any function calls from the response in OpenAI format."""
+        tool_calls = []
+        if self.candidates:
+            candidate = self.candidates[0]
+            content = candidate.content
+            if content and "parts" in content:
+                call_counter = 1
+                for part in content["parts"]:
+                    if isinstance(part, dict) and "function_call" in part:
+                        func_call = part["function_call"]
+                        # Convert Gemini format to OpenAI format expected by parser
+                        openai_format = {
+                            "id": f"call_{call_counter:03d}",
+                            "function": {
+                                "name": func_call.get("name", ""),
+                                "arguments": json.dumps(func_call.get("args", {}))
+                            }
+                        }
+                        tool_calls.append(openai_format)
+                        call_counter += 1
+        return tool_calls
+    
+    @property
     def has_content(self) -> bool:
-        """Check if response has actual content."""
-        return bool(self.text.strip())
+        """Check if this response has any content (text or function calls)."""
+        return bool(self.text or self.tool_calls)
 
 
 class BaseContentGenerator(ABC):
@@ -201,7 +226,8 @@ class BaseContentGenerator(ABC):
     async def generate_content(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> GenerateContentResponse:
         """Generate content based on messages."""
         pass
@@ -210,7 +236,8 @@ class BaseContentGenerator(ABC):
     async def generate_content_stream(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Generate content with streaming response."""
         pass
@@ -232,6 +259,14 @@ class BaseContentGenerator(ABC):
     def get_context_limit(self) -> int:
         """Get the context window limit for this model."""
         pass
+    
+    def set_tools(self, tools: List[Dict[str, Any]]) -> None:
+        """Set the available tools for function calling."""
+        if hasattr(self.config, 'tools'):
+            self.config.tools = tools
+        else:
+            # For providers that don't support tools, this is a no-op
+            pass
 
 
 def detect_provider_from_model(model: str) -> ModelProvider:

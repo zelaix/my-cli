@@ -10,7 +10,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# gemini-cli/
+gemini-cli/
 lib/
 lib64/
 parts/
