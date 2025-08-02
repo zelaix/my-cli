@@ -1,12 +1,12 @@
 # My CLI
 
-A Python-based AI command-line assistant inspired by Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli), bringing the power of AI directly to your terminal with enhanced performance and extensibility.
+A Python-based AI command-line assistant inspired by Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli), bringing the power of AI directly to your terminal with enhanced performance, multi-provider support, and extensibility.
 
 ## Project Status
 
-🎉 **Phase 2.1 Complete - Gemini API Client Ready** 🎉
+🎉 **Phase 2.1+ Complete - Multi-Provider AI Assistant Ready** 🎉
 
-The project has successfully completed Phase 2.1 with a fully functional Gemini API client featuring streaming responses, conversation management, token handling, and comprehensive error handling - all integrated into a working CLI!
+The project has successfully completed Phase 2.1 with a fully functional multi-provider AI client featuring **Gemini AND Kimi K2 model support**, streaming responses, conversation management, token handling, and comprehensive error handling - all integrated into a working CLI!
 
 ### Completed Work
 - ✅ Architecture analysis of original TypeScript Gemini CLI
@@ -17,15 +17,16 @@ The project has successfully completed Phase 2.1 with a fully functional Gemini 
 - ✅ **Phase 1.1**: Project structure and dependencies setup
 - ✅ **Phase 1.2**: Core architecture implementation  
 - ✅ **Phase 1.3**: Hierarchical configuration system
-- ✅ **Phase 2.1**: Gemini API Client with streaming & conversation management
+- ✅ **Phase 2.1**: Multi-Provider AI Client with streaming & conversation management
+- ✅ **Multi-Provider Support**: Gemini AND Kimi K2 models with provider auto-detection
 - ✅ Python package structure with proper module organization
 - ✅ Modern Python tooling configuration (Ruff, MyPy, Pytest)
 - ✅ **Working CLI framework** with Typer and Rich
 - ✅ **Hierarchical configuration system** with JSON comments and .env support
 - ✅ **Environment variable interpolation** (${VAR} syntax support)
 - ✅ **Advanced CLI commands** for configuration management
-- ✅ **Real AI integration** with Google Gemini API
-- ✅ **Streaming responses** with real-time chat
+- ✅ **Real AI integration** with Google Gemini AND Kimi K2 APIs
+- ✅ **Streaming responses** with real-time chat for all providers
 - ✅ **Conversation management** with turn tracking and statistics
 - ✅ **Token counting and compression** for efficient API usage
 - ✅ **Retry logic** with exponential backoff and model fallback
@@ -34,10 +35,11 @@ The project has successfully completed Phase 2.1 with a fully functional Gemini 
 - ✅ **Package installation** via pip
 
 ### Current Status
-- 📋 **Phase**: 2.1 - Gemini API Client ✅ **COMPLETE**
-- 🎯 **Next Step**: Implement Tool Execution System (Phase 2.2)
-- 📅 **Estimated Timeline**: 20 weeks remaining for full implementation  
-- 🏗️ **Implementation**: Complete AI integration with streaming, conversation management, and advanced configuration system
+- 📋 **Phase**: 2.1+ - Multi-Provider AI Client ✅ **COMPLETE**
+- 🌟 **Unique Feature**: **Multi-Provider Support** (Gemini + Kimi K2) - Beyond original Gemini CLI
+- 🎯 **Next Step**: Implement Tool Execution System (Phase 2.2) - Agentic Capabilities
+- 📅 **Goal**: Full agentic coding assistant with comprehensive tool ecosystem
+- 🏗️ **Current**: Production-ready multi-provider chat assistant with advanced configuration
 
 ### Quick Start
 
@@ -81,8 +83,13 @@ MY_CLI_API_KEY=your-key my-cli chat  # Interactive mode
 my-cli chat "Tell me about Python" --stream
 my-cli chat "Tell me about Python" --no-stream
 
-# Use different models
+# Use different models (Gemini)
 my-cli chat "Hello" --model gemini-1.5-pro
+my-cli chat "Hello" --model gemini-2.0-flash-exp
+
+# Use Kimi K2 models (NEW!)
+MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Hello" --model kimi-k2-instruct
+MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Hello" --model kimi-k2-base
 ```
 
 #### Development
@@ -99,13 +106,29 @@ python scripts/build.py clean
 
 ## What is My CLI?
 
-My CLI is a command-line AI workflow tool that connects to your tools, understands your code, and accelerates your workflows using AI models. With My CLI you can:
+My CLI is a Python-based **multi-provider agentic coding assistant** that brings AI-powered development workflows to your terminal. Building upon Google's Gemini CLI foundation, we've created an enhanced Python reimplementation with **unique multi-provider support**.
 
-- Query and edit large codebases within Gemini's 1M token context window
-- Generate new apps from PDFs or sketches using multimodal capabilities
-- Automate operational tasks like querying pull requests or handling complex rebases
-- Use tools and MCP servers to connect new capabilities
-- Ground queries with Google Search integration
+### 🚀 **Current Capabilities**
+- **Multi-Provider AI Support**: Choose between Gemini and Kimi K2 models based on your needs
+- **Real-time Streaming Chat**: Interactive conversations with AI assistants
+- **Advanced Configuration**: Hierarchical settings with environment variable interpolation
+- **Production-Ready**: Robust error handling, retry logic, and comprehensive testing
+
+### 🎯 **Final Goal: Full Agentic Coding Assistant**
+- **File Operations**: Read, write, and edit code files with AI guidance
+- **Shell Integration**: Execute commands and build processes safely
+- **Codebase Analysis**: Understand large projects within extended context windows
+- **Automated Workflows**: Handle complex development tasks like refactoring, testing, and deployment
+- **Tool Ecosystem**: Extensible plugin system for custom development tools
+- **Web Integration**: Search documentation and fetch external resources
+- **Memory System**: Persistent project context and conversation history
+- **MCP Protocol**: Connect to external services and tools
+
+### 🌟 **Why My CLI?**
+- **Enhanced Multi-Provider Support**: Use Gemini for creativity, Kimi K2 for long context analysis
+- **Python Ecosystem**: Access to rich ML/AI libraries and better extensibility
+- **Modern Architecture**: Clean, async-first design with comprehensive testing
+- **Developer Experience**: Intuitive APIs, better debugging, and rich terminal interface
 
 ## Why Python?
 
@@ -195,11 +218,13 @@ Our Python implementation aims to provide:
 - ✅ **Main GeminiClient orchestrator** - Complete client coordinating all components
 - ✅ **CLI integration** - Full integration with interactive and streaming chat commands
 
-#### 2.2 Tool Execution System 🔄 NEXT
-- Implement tool execution pipeline with confirmation workflows
-- Add tool result processing and integration with conversation flow
-- Create tool execution hooks and event handling
-- Implement tool parameter validation and safety checks
+#### 2.2 Core Tool System Implementation 🔄 NEXT
+- **Built-in Core Tools**: Implement essential tools (`read_file`, `write_file`, `list_directory`, `shell`, `edit_file`)
+- **AI-Tool Integration**: Connect tool execution with conversation flow - AI can request and execute tools
+- **Confirmation Workflows**: Safe execution with user approval for destructive operations
+- **Tool Result Processing**: Feed tool results back into AI conversation context
+- **Execution Pipeline**: Orchestrate tool calls within conversation turns
+- **Parameter Validation**: Robust input validation and error handling
 
 #### 2.3 Enhanced Conversation Features 🔄 Planned
 - Implement chat history persistence and memory
@@ -207,25 +232,26 @@ Our Python implementation aims to provide:
 - Create context window management with smart truncation
 - Port core system prompts and dynamic prompt construction
 
-### Phase 3: Tool System (Weeks 9-12)
-**Status**: 🔄 Foundation Complete → Implementation Needed
+### Phase 3: Advanced Tool Ecosystem (Weeks 9-12)
+**Status**: 🔄 Core Foundation Ready → Ecosystem Expansion
 
-#### 3.1 Tool Framework ✅ COMPLETE
-- ✅ **Base Tool class and interface** - Complete protocol-based framework
-- ✅ **Tool registration system** - Dynamic discovery and registration
-- ✅ **Parameter validation** - Pydantic-based validation with JSON schemas
-- 🔄 **Tool execution pipeline** - Needs integration with Phase 2.1 client
+#### 3.1 MCP Integration 🔄 NEXT
+- **MCP Protocol Support**: Implement Model Context Protocol client
+- **External Tool Servers**: Connect to MCP servers for extended capabilities
+- **Server Discovery**: Automatic discovery and connection to MCP services
+- **OAuth Integration**: Secure authentication for remote MCP servers
 
-#### 3.2 Core Tools Implementation 🔄 NEXT
-- **File System Tools**: `read_file`, `read_many_files`, `write_file`, `edit_file`, `ls`, `glob`
-- **Search Tools**: `grep`, `web_search`, `web_fetch`
-- **Shell Integration**: `shell` with safety confirmations
+#### 3.2 Advanced Tools Implementation 🔄 Planned
+- **Web Integration**: `web_search`, `web_fetch` for research and documentation
+- **Advanced File Operations**: `grep`, `glob`, multi-file processing, batch operations
+- **Git Integration**: Version control operations and project management
+- **Search Tools**: Advanced search and filtering capabilities
 
-#### 3.3 Tool Safety & Confirmation 🔄 Planned
-- Implement user confirmation system
-- Add tool execution previews
-- Create safety checks for destructive operations
-- Add sandbox execution support
+#### 3.3 Tool Discovery & Safety 🔄 Planned
+- **Dynamic Tool Registration**: Command-based and MCP-based tool discovery
+- **Advanced Safety System**: Sandbox execution, permission systems
+- **Tool Filtering**: Include/exclude lists, trust management
+- **Custom Tool Support**: Framework for external tool development
 
 ### Phase 4: CLI Interface & UX (Weeks 11-14)
 **Status**: 🔄 Planned
@@ -248,22 +274,16 @@ Our Python implementation aims to provide:
 - Add custom color scheme support
 - Implement dynamic theme switching
 
-### Phase 5: Advanced Features (Weeks 15-18)
+### Phase 5: Extended Capabilities (Weeks 15-18)
 **Status**: 🔄 Planned
 
-#### 5.1 MCP Integration
-- Implement MCP protocol support
-- Create MCP server discovery and connection
-- Add OAuth flow for MCP services
-- Port Google Auth provider
-
-#### 5.2 Memory System
+#### 5.1 Memory System
 - Implement conversation memory management
 - Add memory export/import functionality
 - Create memory compression and summarization
 - Add memory search and retrieval
 
-#### 5.3 Workspace Context
+#### 5.2 Workspace Context
 - Implement project detection (git, package files)
 - Add .my-cli-ignore support
 - Create workspace file discovery
@@ -406,8 +426,10 @@ Our Python implementation aims to provide:
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `MY_CLI_API_KEY` | None | AI API key (required for chat) |
-| `MY_CLI_MODEL` | `gemini-2.0-flash-exp` | AI model to use |
+| `MY_CLI_API_KEY` | None | Gemini API key (for Gemini models) |
+| `MY_CLI_KIMI_API_KEY` | None | Kimi API key (for Kimi K2 models) |
+| `MY_CLI_MODEL` | `kimi-k2-instruct` | Default AI model to use |
+| `MY_CLI_KIMI_PROVIDER` | `moonshot` | Kimi API provider (moonshot, deepinfra, etc.) |
 | `MY_CLI_THEME` | `default` | Color theme |
 | `MY_CLI_AUTO_CONFIRM` | `false` | Auto-confirm tool executions |
 | `MY_CLI_MAX_TOKENS` | `8192` | Maximum response tokens |
@@ -416,20 +438,55 @@ Our Python implementation aims to provide:
 | `MY_CLI_DEBUG` | `false` | Enable debug logging |
 | `MY_CLI_LOG_LEVEL` | `INFO` | Logging level |
 
-### ✅ Phase 2.1 AI Features (Working Now!)
+#### **Supported Models**
 
-- ✅ **Real AI Integration**: Complete Google Gemini API integration with streaming
-- ✅ **Conversation Management**: Turn tracking, statistics, and session management  
-- ✅ **Token Management**: Smart counting, compression, and limit enforcement
-- ✅ **Error Handling**: Comprehensive retry logic and user-friendly error messages
-- ✅ **Authentication**: Multiple authentication methods with secure API key handling
-- ✅ **Interactive Chat**: Rich terminal interface with real-time streaming responses
+**Kimi K2 Models:**
+- `kimi-k2-instruct` (default) - Instruction-tuned for conversations
+- `kimi-k2-base` - Base model for general use
 
-### 🔄 Coming Features (Phase 2.2+)
+**Gemini Models:**
+- `gemini-2.0-flash-exp` - Latest Gemini model
+- `gemini-1.5-pro` - High capability model
+- `gemini-1.5-flash` - Fast response model
 
-- **Tool Integration**: File operations, shell commands, web tools with AI conversation flow
-- **Enhanced Memory**: Persistent conversation history and smart context management
-- **MCP Integration**: Model Context Protocol support for extended capabilities
+**Kimi Providers:**
+- `moonshot` (default) - Moonshot AI provider
+- `deepinfra` - DeepInfra platform
+- `together` - Together AI
+- `fireworks` - Fireworks AI
+- `groq` - Groq platform
+- `openrouter` - OpenRouter
+
+### ✅ Phase 2.1+ AI Features (Working Now!)
+
+- ✅ **Multi-Provider AI Integration**: Complete Google Gemini AND Kimi K2 API integration with streaming
+- ✅ **Provider Auto-Detection**: Automatic routing based on model names (gemini-* → Gemini, kimi-* → Kimi)
+- ✅ **Conversation Management**: Turn tracking, statistics, and session management across all providers
+- ✅ **Token Management**: Smart counting, compression, and limit enforcement for all models
+- ✅ **Error Handling**: Comprehensive retry logic and provider-specific error messages
+- ✅ **Authentication**: Multiple authentication methods with secure API key handling per provider
+- ✅ **Interactive Chat**: Rich terminal interface with real-time streaming responses for all models
+- ✅ **Model Flexibility**: Switch between providers/models without restart or reconfiguration
+
+### 🔄 Coming Features (Phase 2.2+) - Road to Agentic Assistant
+
+**Phase 2.2 - Core Tool System Implementation (Next Priority)**
+- **Built-in Core Tools**: Essential tools for file operations and shell commands
+- **AI-Tool Integration**: AI can request and execute tools with conversation flow integration
+- **Confirmation Workflows**: Safe execution with user approval for destructive operations
+- **Tool Result Processing**: Feed tool results back into AI conversation context
+
+**Phase 3 - Advanced Tool Ecosystem**
+- **MCP Integration**: Model Context Protocol support for external tool servers
+- **Advanced Tools**: Web search, multi-file operations, Git integration
+- **Tool Discovery**: Dynamic registration and external tool development
+- **Advanced Safety**: Sandbox execution, permission systems, trust management
+
+**Phase 4+ - Extended Capabilities** 
+- **Memory System**: Persistent conversation history and project context
+- **Multimodal Support**: Image analysis, document parsing, visual understanding
+- **Automated Workflows**: Complex development task orchestration
+- **Enhanced UX**: Rich terminal interface, themes, and advanced features
 
 ## Testing
 
@@ -477,15 +534,19 @@ MY_CLI_MODEL=custom-model MY_CLI_THEME=dracula my-cli config --show
 echo 'MY_CLI_THEME=${HOME}/themes/custom' >> .my-cli/.env
 my-cli config --key theme
 
-# Test real AI chat functionality  
-MY_CLI_API_KEY=your-api-key my-cli chat "Hello world"
+# Test real AI chat functionality with Gemini
+MY_CLI_API_KEY=your-gemini-key my-cli chat "Hello world"
 
-# Test streaming vs non-streaming
-MY_CLI_API_KEY=your-api-key my-cli chat "Tell me about Python" --stream
-MY_CLI_API_KEY=your-api-key my-cli chat "Tell me about Python" --no-stream
+# Test Kimi K2 models
+MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Hello world" --model kimi-k2-instruct
 
-# Test interactive mode with commands
-MY_CLI_API_KEY=your-api-key my-cli chat
+# Test streaming vs non-streaming (works with all models)
+MY_CLI_API_KEY=your-key my-cli chat "Tell me about Python" --stream
+MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Tell me about Python" --no-stream --model kimi-k2-instruct
+
+# Test interactive mode with commands (works with all models)
+MY_CLI_API_KEY=your-key my-cli chat
+MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat --model kimi-k2-instruct
 # In interactive mode, try:
 # /help - Show available commands
 # /stats - View conversation statistics  
@@ -532,13 +593,28 @@ python scripts/build.py test
 ```
 
 ### Contribution Areas
-- 🔥 **Phase 2.2**: Tool execution system integration (high priority)
-- 🛠️ **Tool System**: File and shell operations implementation
-- 🧠 **Memory System**: Persistent conversation history
-- 🎨 **UI/UX**: Enhanced terminal interface with markdown rendering
-- 📚 **Documentation**: Usage examples and tutorials
-- 🧪 **Testing**: Integration tests for tool execution
-- 🔌 **MCP Integration**: Model Context Protocol support
+
+**🔥 HIGH PRIORITY - Core Agentic Capabilities (Phase 2.2)**
+- **Built-in Core Tools**: Implement `read_file`, `write_file`, `list_directory`, `shell`, `edit_file`
+- **AI-Tool Integration**: Connect AI conversation flow with tool execution system
+- **Tool Safety**: User confirmation workflows and execution previews
+- **Result Processing**: Feed tool results back into AI conversation context
+
+**🛠️ MEDIUM PRIORITY - Tool Ecosystem (Phase 3)**
+- **MCP Integration**: Model Context Protocol support for external tool servers
+- **Advanced Tools**: Web search, multi-file operations, Git integration
+- **Tool Discovery**: Dynamic registration and external tool development
+- **Advanced Safety**: Sandbox execution, permission systems, trust management
+
+**🧪 SUPPORT & QUALITY**
+- **Testing**: Integration tests for tool execution and multi-provider scenarios
+- **Documentation**: Usage examples, tutorials, and API reference
+- **Performance**: Optimization for large codebases and long conversations
+
+**🔌 EXTENDED CAPABILITIES (Phase 4+)**
+- **Memory System**: Persistent conversation history and project context
+- **Enhanced UX**: Markdown rendering, syntax highlighting, rich terminal interface
+- **Multimodal**: Image and document processing capabilities
 
 ## License
 
@@ -546,4 +622,13 @@ This project will be licensed under the Apache 2.0 License, maintaining compatib
 
 ## Acknowledgments
 
-This project is inspired by and aims to maintain compatibility with Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli). We thank the Google Gemini team for their excellent work on the original implementation.
+This project is inspired by and aims to enhance upon Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli). We thank the Google Gemini team for their excellent work on the original implementation. 
+
+**Key Enhancements Over Original:**
+- **Multi-Provider Support**: Added Kimi K2 model integration alongside Gemini
+- **Python Ecosystem**: Modern Python architecture with rich AI/ML library access  
+- **Enhanced Configuration**: 6-layer hierarchical configuration with environment interpolation
+- **Improved Error Handling**: Provider-specific error classification and recovery
+- **Advanced Testing**: Comprehensive test suite with 93+ passing tests
+
+Our goal is to create the most capable and extensible agentic coding assistant while honoring the vision and architecture of the original Gemini CLI.

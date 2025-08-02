@@ -21,7 +21,10 @@ from ..services.git_service import GitService
 from ..services.workspace import WorkspaceContext
 from ..tools.registry import ToolRegistry
 from ..prompts.registry import PromptRegistry
-from ..core.client import GeminiClient, ContentGeneratorConfig, AuthType, create_gemini_client
+from ..core.client import (
+    GeminiClient, GeminiProviderConfig, AuthType, create_gemini_client,
+    BaseContentGenerator, create_content_generator, get_model_provider, ModelProvider
+)
 from ..core.container import ServiceContainer
 
 logger = logging.getLogger(__name__)
@@ -80,7 +83,7 @@ class MyCliConfig:
         self.debug_mode = self._settings.debug
         
         # Service instances (initialized lazily)
-        self._api_client: Optional[GeminiClient] = None
+        self._api_client: Optional[BaseContentGenerator] = None
         self._tool_registry: Optional[ToolRegistry] = None
         self._prompt_registry: Optional[PromptRegistry] = None
         self._file_service: Optional[FileDiscoveryService] = None
@@ -137,17 +140,24 @@ class MyCliConfig:
         """Get the current settings."""
         return self._settings
     
-    async def get_api_client(self) -> GeminiClient:
+    async def get_api_client(self) -> BaseContentGenerator:
         """Get the API client instance."""
         if not self._api_client:
-            if not self._settings.api_key:
-                raise ValueError("API key not configured. Set MY_CLI_API_KEY environment variable.")
+            # Get the appropriate API key for the current model
+            api_key = self._settings.get_api_key_for_model(self._settings.model)
+            if not api_key:
+                model_type = "Kimi" if self._settings.model.startswith("kimi-") else "Gemini"
+                env_var = "MY_CLI_KIMI_API_KEY" if model_type == "Kimi" else "MY_CLI_API_KEY"
+                raise ValueError(f"{model_type} API key not configured. Set {env_var} environment variable.")
             
-            self._api_client = create_gemini_client(
-                api_key=self._settings.api_key,
+            # Create content generator using the factory
+            self._api_client = create_content_generator(
                 model=self._settings.model,
+                api_key=api_key,
                 temperature=self._settings.temperature,
-                max_tokens=self._settings.max_tokens
+                max_tokens=self._settings.max_tokens,
+                # Add Kimi-specific settings if it's a Kimi model
+                **({"kimi_provider": self._settings.kimi_provider} if self._settings.model.startswith("kimi-") else {})
             )
             await self._api_client.initialize()
         

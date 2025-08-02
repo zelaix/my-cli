@@ -1,9 +1,8 @@
 """
 API client interfaces and implementations for My CLI.
 
-This module provides the core API client interfaces and implementations
-for communicating with AI models, mirroring the functionality of the
-original Gemini CLI's client system.
+This module provides backward compatibility with the original client system
+while redirecting to the new multi-provider architecture.
 """
 
 from abc import ABC, abstractmethod
@@ -17,39 +16,28 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 
+# Import from new provider system
+from .client.providers import (
+    GeminiProviderConfig,
+    AuthType,
+    GenerateContentResponse,
+    GenerationCandidate,
+    UsageMetadata,
+    ModelProvider
+)
+from .client.content_generator import GeminiContentGenerator
+from .client.provider_factory import create_content_generator
+from .client.turn import Message, MessageRole
+
 logger = logging.getLogger(__name__)
 
-
-class AuthType(Enum):
-    """Authentication types for API clients."""
-    API_KEY = "api_key"
-    LOGIN_WITH_GOOGLE = "login_with_google"
-    APPLICATION_DEFAULT_CREDENTIALS = "application_default_credentials"
-
-
-@dataclass
-class ContentGeneratorConfig:
-    """Configuration for content generation."""
-    model: str
-    auth_type: AuthType
-    api_key: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens: int = 8192
-    top_p: float = 0.95
-    top_k: int = 40
-
+# Backward compatibility aliases
+ContentGeneratorConfig = GeminiProviderConfig
 
 class Content(BaseModel):
-    """Represents a piece of content in a conversation."""
+    """Represents a piece of content in a conversation (backward compatibility)."""
     role: str = Field(description="Role of the content (user or model)")
     parts: List[Dict[str, Any]] = Field(description="Content parts")
-
-
-class GenerateContentResponse(BaseModel):
-    """Response from content generation."""
-    candidates: List[Dict[str, Any]] = Field(default_factory=list)
-    usage_metadata: Optional[Dict[str, Any]] = None
-    automatic_function_calling_history: Optional[List[Content]] = None
 
 
 class SendMessageParameters(BaseModel):

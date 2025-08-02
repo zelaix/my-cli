@@ -31,12 +31,15 @@ from .streaming import (
     create_tool_call_request_event,
     create_tool_call_response_event,
 )
+from .providers import (
+    GeminiProviderConfig,
+    AuthType,
+    GenerateContentResponse,
+    ModelProvider,
+)
 from .content_generator import (
     ContentGenerator,
     GeminiContentGenerator,
-    ContentGeneratorConfig,
-    AuthType,
-    GenerateContentResponse,
 )
 from .turn import (
     Turn,
@@ -64,7 +67,7 @@ logger = logging.getLogger(__name__)
 class GeminiClientConfig:
     """Configuration for the main Gemini client."""
     # Content generation config
-    content_generator_config: ContentGeneratorConfig
+    content_generator_config: GeminiProviderConfig
     
     # Conversation settings
     max_turns: int = 1000
@@ -568,8 +571,9 @@ def create_gemini_client_config(
     **kwargs
 ) -> GeminiClientConfig:
     """Create a Gemini client configuration."""
-    content_config = ContentGeneratorConfig(
+    content_config = GeminiProviderConfig(
         model=model,
+        provider=ModelProvider.GEMINI,
         auth_type=auth_type,
         api_key=api_key,
         max_tokens=max_tokens,

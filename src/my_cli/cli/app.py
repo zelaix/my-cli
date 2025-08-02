@@ -20,6 +20,7 @@ from my_cli.core.config import MyCliConfig
 from my_cli.config.hierarchical import SettingScope
 from my_cli.config.env_loader import EnvFileLoader
 from my_cli.core.client import create_gemini_client, AuthType, StreamEvent, GeminiError
+from my_cli.core.client.turn import Message, MessageRole, MessagePart
 
 # Create the main Typer application
 app = typer.Typer(
@@ -86,20 +87,36 @@ async def _async_chat_command(
         await config.initialize()
         settings = config.settings
         
-        if not settings.api_key:
-            console.print("[red]Error:[/red] No API key configured.")
-            console.print("[dim]Set MY_CLI_API_KEY environment variable or use 'my-cli config --set api_key=your-key'[/dim]")
+        # Determine the model to use
+        target_model = model or settings.model
+        
+        # Check if API key is configured for the target model
+        api_key = settings.get_api_key_for_model(target_model)
+        if not api_key:
+            model_type = "Kimi" if target_model.startswith("kimi-") else "Gemini"
+            env_var = "MY_CLI_KIMI_API_KEY" if model_type == "Kimi" else "MY_CLI_API_KEY"
+            console.print(f"[red]Error:[/red] No {model_type} API key configured.")
+            console.print(f"[dim]Set {env_var} environment variable or use 'my-cli config --set {'kimi_api_key' if model_type == 'Kimi' else 'api_key'}=your-key'[/dim]")
             raise typer.Exit(1)
         
-        # Create Gemini client with settings
-        client = create_gemini_client(
-            api_key=settings.api_key,
-            model=model or settings.model,
-            auth_type=AuthType.API_KEY,
-            max_tokens=settings.max_tokens,
-            temperature=settings.temperature,
-            stream_by_default=stream,
-        )
+        # Create API client using the multi-provider factory
+        from my_cli.core.client.provider_factory import create_content_generator
+        
+        # Prepare creation parameters
+        client_params = {
+            "model": target_model,
+            "api_key": api_key,
+            "max_tokens": settings.max_tokens,
+            "temperature": settings.temperature,
+        }
+        
+        # Add Kimi-specific parameters if it's a Kimi model
+        if target_model.startswith("kimi-"):
+            client_params["kimi_provider"] = settings.kimi_provider
+            if settings.kimi_base_url:
+                client_params["base_url"] = settings.kimi_base_url
+        
+        client = create_content_generator(**client_params)
         
         # Initialize client
         await client.initialize()
@@ -121,30 +138,35 @@ async def _async_chat_command(
         raise typer.Exit(1)
 
 
-async def _send_single_message(client, message: str, stream: bool) -> None:
+async def _send_single_message(client, message: str, stream: bool, show_user_message: bool = True) -> None:
     """Send a single message to the AI."""
-    console.print(f"[yellow]You:[/yellow] {message}")
+    if show_user_message:
+        console.print(f"[yellow]You:[/yellow] {message}")
+    
+    # Create message object
+    messages = [Message(
+        role=MessageRole.USER,
+        parts=[MessagePart(text=message)]
+    )]
     
     if stream:
         # Streaming response
         console.print("[blue]AI:[/blue] ", end="")
         
         try:
-            response_stream = await client.send_message(message, stream=True)
             response_text = ""
+            async for response_chunk in client.generate_content_stream(messages):
+                if response_chunk.has_content:
+                    chunk_text = response_chunk.text
+                    console.print(chunk_text, end="")
+                    response_text += chunk_text
             
-            async for event in response_stream:
-                if event.type == StreamEvent.CONTENT:
-                    console.print(event.value, end="")
-                    response_text += event.value
-                elif event.type == StreamEvent.FINISHED:
-                    console.print()  # New line at end
-                    # Show stats if debug mode
-                    if hasattr(event.value, 'get') and event.value.get('total_tokens'):
-                        console.print(f"[dim]({event.value['total_tokens']} tokens)[/dim]")
-                elif event.type == StreamEvent.ERROR:
-                    console.print(f"\n[red]Error:[/red] {event.value.message}")
-                    return
+            console.print()  # New line at end
+            
+            # Show token usage if available (estimate for streaming)
+            if response_text:
+                estimated_tokens = len(response_text) // 4  # Rough estimate
+                console.print(f"[dim](~{estimated_tokens} tokens)[/dim]")
                     
         except Exception as e:
             console.print(f"\n[red]Error:[/red] {e}")
@@ -152,7 +174,7 @@ async def _send_single_message(client, message: str, stream: bool) -> None:
         # Non-streaming response
         try:
             with console.status("[dim]Thinking...[/dim]"):
-                response = await client.send_message(message, stream=False)
+                response = await client.generate_content(messages)
             
             console.print(f"[blue]AI:[/blue] {response.text}")
             
@@ -167,7 +189,8 @@ async def _send_single_message(client, message: str, stream: bool) -> None:
 async def _interactive_chat(client, stream: bool) -> None:
     """Start an interactive chat session."""
     console.print("[bold green]My CLI[/bold green] - Interactive Chat")
-    console.print(f"[dim]Model: {client.config.content_generator_config.model}[/dim]")
+    console.print(f"[dim]Model: {client.model}[/dim]")
+    console.print(f"[dim]Provider: {client.provider.value}[/dim]")
     console.print(f"[dim]Streaming: {'enabled' if stream else 'disabled'}[/dim]")
     console.print("[dim]Type 'exit', 'quit', or press Ctrl+C to exit[/dim]")
     console.print("[dim]Type '/help' for commands[/dim]\n")
@@ -187,13 +210,11 @@ async def _interactive_chat(client, stream: bool) -> None:
                 continue
                 
             elif user_input.lower().strip() == "/stats":
-                await _show_chat_stats(client)
+                console.print("[dim]Stats not available in this version[/dim]")
                 continue
                 
             elif user_input.lower().strip() == "/clear":
-                # Clear conversation history
-                client.turn_manager.clear_history()
-                console.print("[dim]Conversation history cleared[/dim]")
+                console.print("[dim]History clearing not available in this version[/dim]")
                 continue
                 
             elif user_input.lower().strip().startswith("/stream"):
@@ -205,33 +226,9 @@ async def _interactive_chat(client, stream: bool) -> None:
             elif user_input.strip() == "":
                 continue
             
-            # Send message to AI
-            if stream:
-                console.print("[blue]AI:[/blue] ", end="")
-                
-                try:
-                    response_stream = await client.send_message(user_input, stream=True)
-                    
-                    async for event in response_stream:
-                        if event.type == StreamEvent.CONTENT:
-                            console.print(event.value, end="")
-                        elif event.type == StreamEvent.FINISHED:
-                            console.print()  # New line at end
-                        elif event.type == StreamEvent.ERROR:
-                            console.print(f"\n[red]Error:[/red] {event.value.message}")
-                            break
-                            
-                except Exception as e:
-                    console.print(f"\n[red]Error:[/red] {e}")
-            else:
-                try:
-                    with console.status("[dim]Thinking...[/dim]"):
-                        response = await client.send_message(user_input, stream=False)
-                    
-                    console.print(f"[blue]AI:[/blue] {response.text}")
-                    
-                except Exception as e:
-                    console.print(f"[red]Error:[/red] {e}")
+            # Send message to AI using the same logic as _send_single_message
+            # Don't show user message again since typer.prompt already showed it
+            await _send_single_message(client, user_input, stream, show_user_message=False)
                     
         except KeyboardInterrupt:
             console.print("\n[dim]Goodbye![/dim]")

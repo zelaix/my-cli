@@ -33,13 +33,29 @@ class MyCliSettings(BaseSettings):
     # API Configuration
     api_key: Optional[str] = Field(
         default=None,
-        description="AI API key"
+        description="Primary AI API key (Gemini/main provider)"
+    )
+    
+    # Kimi-specific API Configuration
+    kimi_api_key: Optional[str] = Field(
+        default=None,
+        description="Kimi K2 API key"
+    )
+    
+    kimi_provider: str = Field(
+        default="moonshot",
+        description="Kimi API provider (moonshot, deepinfra, together, etc.)"
+    )
+    
+    kimi_base_url: Optional[str] = Field(
+        default=None,
+        description="Custom base URL for Kimi API"
     )
     
     # Model Configuration
     model: str = Field(
-        default="gemini-2.0-flash-exp",
-        description="Default AI model to use"
+        default="kimi-k2-instruct",
+        description="Default AI model to use (supports gemini-* and kimi-* models)"
     )
     
     # UI Configuration
@@ -138,6 +154,31 @@ class MyCliSettings(BaseSettings):
             raise ValueError(f"Invalid log level '{v}'. Valid levels: {', '.join(sorted(valid_levels))}")
         return v_upper
     
+    @field_validator("kimi_provider")
+    @classmethod
+    def validate_kimi_provider(cls, v: str) -> str:
+        """Validate Kimi provider name."""
+        valid_providers = {
+            "moonshot", "deepinfra", "together", "fireworks", "groq", "openrouter"
+        }
+        if v not in valid_providers:
+            raise ValueError(f"Invalid Kimi provider '{v}'. Valid providers: {', '.join(sorted(valid_providers))}")
+        return v
+    
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: str) -> str:
+        """Validate model name format."""
+        valid_prefixes = ["gemini-", "kimi-", "gpt-", "claude-"]
+        if not any(v.startswith(prefix) for prefix in valid_prefixes):
+            # Allow backward compatibility for older Gemini model names
+            if v in ["gemini-pro", "gemini-pro-vision", "text-bison", "chat-bison"]:
+                return v
+            raise ValueError(
+                f"Invalid model '{v}'. Model names should start with: {', '.join(valid_prefixes)}"
+            )
+        return v
+    
     def ensure_directories(self) -> None:
         """Ensure configuration and cache directories exist."""
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +192,20 @@ class MyCliSettings(BaseSettings):
     @property
     def is_configured(self) -> bool:
         """Check if the CLI is properly configured."""
-        return self.api_key is not None
+        # Check if we have API key for the current model
+        if self.model.startswith("kimi-"):
+            return self.kimi_api_key is not None
+        else:
+            return self.api_key is not None
+    
+    def get_api_key_for_model(self, model: Optional[str] = None) -> Optional[str]:
+        """Get the appropriate API key for a given model."""
+        target_model = model or self.model
+        
+        if target_model.startswith("kimi-"):
+            return self.kimi_api_key
+        else:
+            return self.api_key
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert settings to dictionary, excluding sensitive data."""
@@ -159,6 +213,8 @@ class MyCliSettings(BaseSettings):
         # Mask sensitive data
         if data.get("api_key"):
             data["api_key"] = "***masked***"
+        if data.get("kimi_api_key"):
+            data["kimi_api_key"] = "***masked***"
         return data
 
 

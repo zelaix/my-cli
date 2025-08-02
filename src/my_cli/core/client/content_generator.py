@@ -1,25 +1,34 @@
 """
-Enhanced content generator for My CLI with comprehensive authentication support.
+Enhanced content generator for My CLI with multi-provider support.
 
-This module provides sophisticated content generation with multiple authentication
-methods, streaming support, and integration with the original Gemini CLI patterns.
+This module provides sophisticated content generation with multiple AI providers,
+authentication methods, streaming support, and integration with the original 
+Gemini CLI patterns.
 """
 
 import asyncio
 import logging
 import os
 import json
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 from pathlib import Path
 
-from pydantic import BaseModel, Field
 import google.generativeai as genai
 from google.oauth2 import service_account
 from google.auth import default
 
+from .providers import (
+    BaseContentGenerator,
+    GeminiProviderConfig,
+    KimiProviderConfig, 
+    GenerateContentResponse,
+    GenerationCandidate,
+    UsageMetadata,
+    ModelProvider,
+    AuthType,
+    detect_provider_from_model,
+    create_provider_config
+)
 from .errors import (
     GeminiError,
     AuthenticationError,
@@ -31,137 +40,18 @@ from .turn import Message, MessageRole, MessagePart, Turn
 
 logger = logging.getLogger(__name__)
 
-
-class AuthType(Enum):
-    """Authentication types for API clients."""
-    API_KEY = "api_key"
-    OAUTH = "oauth"
-    APPLICATION_DEFAULT_CREDENTIALS = "application_default_credentials"
-    SERVICE_ACCOUNT = "service_account"
-    VERTEX_AI = "vertex_ai"
+# Re-export common types for backward compatibility
+ContentGenerator = BaseContentGenerator
 
 
-@dataclass
-class ContentGeneratorConfig:
-    """Configuration for content generation."""
-    model: str
-    auth_type: AuthType
-    
-    # Authentication credentials
-    api_key: Optional[str] = None
-    service_account_path: Optional[str] = None
-    oauth_credentials: Optional[Dict[str, Any]] = None
-    project_id: Optional[str] = None
-    location: Optional[str] = None
-    
-    # Generation parameters
-    temperature: float = 0.7
-    max_tokens: int = 8192
-    top_p: float = 0.95
-    top_k: int = 40
-    stop_sequences: Optional[List[str]] = None
-    
-    # Safety settings
-    safety_settings: Optional[Dict[str, Any]] = None
-    
-    # Tools and function calling
-    tools: Optional[List[Dict[str, Any]]] = None
-    tool_config: Optional[Dict[str, Any]] = None
-    
-    # Request settings
-    timeout_seconds: float = 60.0
-    retry_config: Optional[RetryConfig] = None
-    
-    # Streaming settings
-    stream: bool = True
-    stream_options: Optional[Dict[str, Any]] = None
-
-
-class GenerationCandidate(BaseModel):
-    """A candidate response from content generation."""
-    content: Dict[str, Any] = Field(description="Generated content")
-    finish_reason: Optional[Any] = Field(default=None, description="Reason generation finished")
-    safety_ratings: Optional[List[Dict[str, Any]]] = Field(default=None, description="Safety ratings")
-    citation_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Citation information")
-
-
-class UsageMetadata(BaseModel):
-    """Token usage metadata from generation."""
-    prompt_token_count: int = Field(default=0, description="Tokens in the prompt")
-    candidates_token_count: int = Field(default=0, description="Tokens in candidates")
-    total_token_count: int = Field(default=0, description="Total tokens used")
-    cached_content_token_count: Optional[int] = Field(default=None, description="Cached tokens")
-
-
-class GenerateContentResponse(BaseModel):
-    """Response from content generation."""
-    candidates: List[GenerationCandidate] = Field(default_factory=list)
-    usage_metadata: Optional[UsageMetadata] = None
-    prompt_feedback: Optional[Dict[str, Any]] = None
-    
-    @property
-    def text(self) -> str:
-        """Get the text content from the first candidate."""
-        if self.candidates:
-            candidate = self.candidates[0]
-            content = candidate.content
-            if content and "parts" in content:
-                text_parts = []
-                for part in content["parts"]:
-                    if isinstance(part, dict) and "text" in part:
-                        text_parts.append(part["text"])
-                return "".join(text_parts)
-        return ""
-    
-    @property
-    def has_content(self) -> bool:
-        """Check if response has actual content."""
-        return bool(self.text.strip())
-
-
-class ContentGenerator(ABC):
-    """Abstract base class for content generators."""
-    
-    @abstractmethod
-    async def initialize(self) -> None:
-        """Initialize the content generator."""
-        pass
-    
-    @abstractmethod
-    async def generate_content(
-        self,
-        messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
-    ) -> GenerateContentResponse:
-        """Generate content based on messages."""
-        pass
-    
-    @abstractmethod
-    async def generate_content_stream(
-        self,
-        messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[GenerateContentResponse, None]:
-        """Generate content with streaming response."""
-        pass
-    
-    @abstractmethod
-    async def count_tokens(
-        self,
-        messages: List[Message]
-    ) -> int:
-        """Count tokens in the given messages."""
-        pass
-
-
-class GeminiContentGenerator(ContentGenerator):
+class GeminiContentGenerator(BaseContentGenerator):
     """Enhanced content generator for Google Gemini API."""
     
-    def __init__(self, config: ContentGeneratorConfig):
-        self.config = config
+    def __init__(self, config: GeminiProviderConfig):
+        super().__init__(config)
+        self.config: GeminiProviderConfig = config
         self._client: Optional[genai.GenerativeModel] = None
         self._chat_session: Optional[Any] = None
-        self._initialized = False
         
         # Initialize retry manager
         self.retry_manager = RetryManager(config.retry_config or RetryConfig())
@@ -366,6 +256,21 @@ class GeminiContentGenerator(ContentGenerator):
             logger.warning(f"Error counting tokens: {e}")
             return 0
     
+    def supports_streaming(self) -> bool:
+        """Check if this provider supports streaming."""
+        return True
+    
+    def get_context_limit(self) -> int:
+        """Get the context window limit for this model."""
+        # Common Gemini model limits
+        context_limits = {
+            "gemini-2.0-flash-exp": 1048576,  # 1M tokens
+            "gemini-1.5-pro": 2097152,       # 2M tokens
+            "gemini-1.5-flash": 1048576,     # 1M tokens
+            "gemini-1.0-pro": 32768,         # 32K tokens
+        }
+        return context_limits.get(self.config.model, 32768)
+    
     async def _generate_content_impl(
         self,
         gemini_messages: List[Dict[str, Any]],
@@ -496,10 +401,11 @@ def create_content_generator_config(
     auth_type: AuthType = AuthType.API_KEY,
     api_key: Optional[str] = None,
     **kwargs
-) -> ContentGeneratorConfig:
-    """Create a content generator configuration."""
-    return ContentGeneratorConfig(
+) -> GeminiProviderConfig:
+    """Create a Gemini content generator configuration (backward compatibility)."""
+    return GeminiProviderConfig(
         model=model,
+        provider=ModelProvider.GEMINI,
         auth_type=auth_type,
         api_key=api_key,
         **kwargs
@@ -513,8 +419,9 @@ def create_gemini_content_generator(
     **kwargs
 ) -> GeminiContentGenerator:
     """Create a Gemini content generator with the given configuration."""
-    config = create_content_generator_config(
+    config = GeminiProviderConfig(
         model=model,
+        provider=ModelProvider.GEMINI,
         auth_type=auth_type,
         api_key=api_key,
         **kwargs
