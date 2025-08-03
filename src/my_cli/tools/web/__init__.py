@@ -4,6 +4,6 @@ This module provides web-related tools including web fetching and search functio
 """
 
 from .web_fetch_tool import WebFetchTool
-from .google_web_search_tool import GoogleWebSearchTool
+from .web_search_tool import WebSearchTool
 
-__all__ = ['WebFetchTool', 'GoogleWebSearchTool']
+__all__ = ['WebFetchTool', 'WebSearchTool']

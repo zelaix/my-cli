@@ -1,6 +1,6 @@
-"""Google web search tool implementation for performing web searches.
+"""Web search tool implementation for performing web searches.
 
-This module provides a Google web search tool similar to the Gemini CLI's web search functionality,
+This module provides a web search tool similar to the Gemini CLI's web search functionality,
 allowing users to search the web and get AI-processed results.
 """
 
@@ -15,15 +15,15 @@ from ..base import ReadOnlyTool
 from ..types import Icon, ToolResult, ToolLocation
 
 
-class GoogleWebSearchTool(ReadOnlyTool):
+class WebSearchTool(ReadOnlyTool):
     """
-    Performs web searches using Google Search and returns AI-processed results.
+    Performs web searches and returns AI-processed results.
     
     This tool searches the web for information based on a query and provides
     structured results with sources and citations.
     """
     
-    NAME = "google_web_search"
+    NAME = "web_search"
     
     def __init__(self, config: Optional[Any] = None):
         schema = {
@@ -39,8 +39,8 @@ class GoogleWebSearchTool(ReadOnlyTool):
         
         super().__init__(
             name=self.NAME,
-            display_name="Google Search",
-            description="Performs a web search using Google Search and returns the results. This tool is useful for finding information on the internet based on a query.",
+            display_name="Web Search",
+            description="Performs a web search and returns the results. This tool is useful for finding information on the internet based on a query.",
             icon=Icon.GLOBE,
             schema=schema,
             config=config

@@ -29,7 +29,7 @@ from .search import (
 )
 from .web import (
     WebFetchTool,
-    GoogleWebSearchTool
+    WebSearchTool
 )
 
 logger = logging.getLogger(__name__)
@@ -264,7 +264,7 @@ class ToolRegistry:
             (GrepTool, "Searches for patterns within file contents using regex"),
             (GlobTool, "Finds files matching glob patterns"),
             (WebFetchTool, "Fetches and processes content from web URLs"),
-            (GoogleWebSearchTool, "Performs web searches using Google Search")
+            (WebSearchTool, "Performs web searches")
         ]
         
         for tool_class, description in builtin_tools:
