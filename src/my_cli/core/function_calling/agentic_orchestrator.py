@@ -32,6 +32,7 @@ from ..client.streaming import (
 )
 from ...tools.registry import ToolRegistry
 from ...tools.types import ToolCallConfirmationDetails, ToolConfirmationOutcome
+from ..subagents import SimpleSubagentDelegator
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,11 @@ class AgenticOrchestrator:
         self.total_tool_calls = 0
         self.successful_tool_calls = 0
         
+        # Initialize subagent delegator for specialized task handling
+        self.subagent_delegator = SimpleSubagentDelegator()
+        
         logger.info(f"Initialized agentic orchestrator with {len(self.function_schemas)} tools for {self.provider} provider")
+        logger.info(f"Subagent delegation enabled with {len(self.subagent_delegator.get_available_subagents())} specialists")
     
     def _detect_provider(self, content_generator) -> str:
         """Detect the provider from the content generator."""
@@ -140,9 +145,22 @@ class AgenticOrchestrator:
         """
         self.total_turns += 1
         
-        # Prepare system instruction if needed
+        # Check for subagent delegation first
+        subagent = None
+        if self.subagent_delegator.should_delegate(message):
+            subagent = self.subagent_delegator.find_matching_subagent(message)
+            if subagent and self.output_handler:
+                self.output_handler(f"🤖 Using {subagent.name} specialist...\n\n")
+        
+        # Prepare system instruction (use subagent's prompt if delegated)
         if not system_instruction:
-            system_instruction = await self._prepare_system_instruction(message)
+            if subagent:
+                # Use subagent's specialized system prompt
+                system_instruction = subagent.system_prompt
+                logger.info(f"Using subagent '{subagent.name}' system prompt for task delegation")
+            else:
+                # Use default system instruction
+                system_instruction = await self._prepare_system_instruction(message)
         
         # Create turn context with previous conversation history
         turn_context = AgenticTurnContext(
@@ -214,7 +232,7 @@ class AgenticOrchestrator:
         self.conversation_history.clear()
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get orchestrator statistics."""
+        """Get orchestrator statistics including subagent information."""
         return {
             "total_turns": self.total_turns,
             "total_tool_calls": self.total_tool_calls,
@@ -224,8 +242,20 @@ class AgenticOrchestrator:
                 if self.total_tool_calls > 0 else 0
             ),
             "available_tools": len(self.function_schemas),
-            "current_turn_active": self.current_turn is not None
+            "current_turn_active": self.current_turn is not None,
+            "subagents": {
+                "available": [s.name for s in self.subagent_delegator.get_available_subagents()],
+                "info": self.subagent_delegator.get_subagent_info()
+            }
         }
+    
+    def get_subagent_info(self) -> Dict[str, str]:
+        """Get information about available subagents."""
+        return self.subagent_delegator.get_subagent_info()
+    
+    def test_subagent_delegation(self, test_tasks: List[str]) -> Dict[str, Optional[str]]:
+        """Test subagent delegation for debugging purposes."""
+        return self.subagent_delegator.test_task_patterns(test_tasks)
 
 
 class StreamingEventProcessor:

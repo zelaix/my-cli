@@ -4,9 +4,9 @@ A Python-based AI command-line assistant inspired by Google's [Gemini CLI](https
 
 ## Project Status
 
-🎉 **Phase 2.3 Complete - Enhanced Agentic AI Assistant** 🎉
+🎉 **Phase 2.4 Complete - Subagents & Specialized AI Assistance** 🎉
 
-The project has successfully completed Phase 2.3 with significant enhancements to our **agentic AI assistant**! New features include **advanced search tools** (`grep`, `glob`), **real web integration** (`web_search`, `web_fetch`), **cross-turn memory**, and **enhanced system prompts** - all built on top of our multi-provider foundation with Gemini AND Kimi K2 model support!
+The project has successfully completed Phase 2.4 with **specialized subagents** that provide expert assistance for different development tasks! New features include **automatic task delegation**, **specialized system prompts** for code review and debugging, plus all Phase 2.3 enhancements: **advanced search tools** (`grep`, `glob`), **real web integration** (`web_search`, `web_fetch`), **cross-turn memory**, and **enhanced system prompts** - all built on top of our multi-provider foundation with Gemini AND Kimi K2 model support!
 
 ### Completed Work
 - ✅ Architecture analysis of original TypeScript Gemini CLI
@@ -20,6 +20,7 @@ The project has successfully completed Phase 2.3 with significant enhancements t
 - ✅ **Phase 2.1**: Multi-Provider AI Client with streaming & conversation management
 - ✅ **Phase 2.2**: Complete Agentic Tool System with multi-step workflows
 - ✅ **Phase 2.3**: Enhanced Tools & Memory (search tools, web integration, cross-turn memory)
+- ✅ **Phase 2.4**: Subagents & Specialized Assistance (automatic task delegation, code review specialist, debug specialist)
 - ✅ **Multi-Provider Support**: Gemini AND Kimi K2 models with provider auto-detection
 - ✅ **Agentic Capabilities**: AI can autonomously execute complex multi-step tasks
 - ✅ Python package structure with proper module organization
@@ -38,11 +39,11 @@ The project has successfully completed Phase 2.3 with significant enhancements t
 - ✅ **Package installation** via pip
 
 ### Current Status
-- 📋 **Phase**: 2.3 - Enhanced Agentic AI Assistant ✅ **COMPLETE**
-- 🌟 **Unique Features**: **Multi-Provider Support** + **Full Agentic Capabilities** + **Advanced Search & Web Tools**
+- 📋 **Phase**: 2.4 - Subagents & Specialized Assistance ✅ **COMPLETE**
+- 🌟 **Unique Features**: **Multi-Provider Support** + **Full Agentic Capabilities** + **Specialized Subagents** + **Advanced Search & Web Tools**
 - 🎯 **Next Step**: Advanced Tool Ecosystem (Phase 3) - MCP Integration & Persistent Memory
 - 📅 **Goal**: Industry-leading agentic coding assistant with comprehensive tool ecosystem
-- 🏗️ **Current**: **Production-ready enhanced agentic AI assistant** with search, web, and memory capabilities
+- 🏗️ **Current**: **Production-ready specialized agentic AI assistant** with expert subagents, search, web, and memory capabilities
 
 ### Quick Start
 
@@ -99,6 +100,11 @@ my-cli chat "Search for all Python files in the src directory and read the main 
 my-cli chat "Find all TODO comments in the codebase" 
 my-cli chat "Search the web for latest Python best practices"
 my-cli chat "Fetch content from https://docs.python.org/3/tutorial/"
+
+# Try the new specialized subagents (NEW in Phase 2.4!)
+my-cli chat "Review the code in auth.py for security issues"     # → Triggers code-reviewer specialist
+my-cli chat "Debug this AttributeError in the login function"   # → Triggers debug-specialist
+my-cli chat "Audit the authentication module for vulnerabilities" # → Triggers code-reviewer specialist
 ```
 
 #### Development
@@ -119,6 +125,7 @@ My CLI is a Python-based **multi-provider agentic coding assistant** that brings
 
 ### 🚀 **Current Capabilities**
 - **Multi-Provider AI Support**: Choose between Gemini and Kimi K2 models based on your needs
+- **Specialized Subagents**: Automatic task delegation to expert specialists (code review, debugging)
 - **Full Agentic Workflow**: AI can autonomously execute complex multi-step tasks
 - **Built-in Core Tools**: File operations (`read_file`, `write_file`, `list_directory`, `edit_file`, `shell`)
 - **Advanced Search Tools**: Pattern matching (`grep`) and file discovery (`glob`) for efficient codebase exploration
@@ -129,18 +136,51 @@ My CLI is a Python-based **multi-provider agentic coding assistant** that brings
 - **Advanced Configuration**: Hierarchical settings with environment variable interpolation
 - **Production-Ready**: Robust error handling, retry logic, and comprehensive testing
 
+### 🤖 **Specialized Subagents (NEW in Phase 2.4!)**
+
+My CLI now features **automatic task delegation** to specialized AI assistants with expert knowledge:
+
+#### 📋 **Code Reviewer Specialist**
+- **Triggered by**: "review code", "security analysis", "audit code", "code quality"
+- **Expertise**: Security vulnerability detection, performance optimization, best practices validation
+- **System Prompt**: Focused on systematic code review methodology with prioritized feedback
+
+#### 🐛 **Debug Specialist** 
+- **Triggered by**: "debug error", "fix bug", "troubleshoot issue", "analyze crash"
+- **Expertise**: Systematic error analysis, root cause identification, minimal fix implementation
+- **System Prompt**: Step-by-step debugging methodology with solution verification
+
+#### ✨ **How It Works**
+```bash
+# These tasks automatically use specialized subagents:
+my-cli chat "Review this authentication code for security vulnerabilities"  # → 🤖 code-reviewer
+my-cli chat "Debug this AttributeError in the user login function"          # → 🤖 debug-specialist
+my-cli chat "Fix the bug causing the application to crash on startup"       # → 🤖 debug-specialist
+
+# General tasks continue using the main agent:
+my-cli chat "Explain how async/await works in Python"                       # → 🤖 main-agent
+```
+
+**Key Benefits:**
+- **Zero Configuration**: No config files needed - works automatically
+- **Transparent Operation**: Clear indication when specialists are used
+- **Expert Prompts**: Task-specific system prompts provide focused expertise
+- **Seamless Fallback**: Main agent handles all non-specialized tasks
+
 ### 🎯 **Final Goal: Full Agentic Coding Assistant**
 - ✅ **File Operations**: Read, write, and edit code files with AI guidance
 - ✅ **Shell Integration**: Execute commands and build processes safely
 - ✅ **Codebase Analysis**: Advanced search and file discovery with `grep` and `glob` tools
 - ✅ **Web Integration**: Real-time web search and content fetching capabilities
 - ✅ **Cross-Turn Memory**: Conversation continuity within interactive sessions
+- ✅ **Specialized Assistance**: Expert subagents for code review and debugging tasks
 - **Automated Workflows**: Handle complex development tasks like refactoring, testing, and deployment
 - **Tool Ecosystem**: Extensible plugin system for custom development tools
 - **Persistent Memory**: Cross-session project context and conversation history
 - **MCP Protocol**: Connect to external services and tools
 
 ### 🌟 **Why My CLI?**
+- **Specialized Subagents**: Unique automatic task delegation to expert AI specialists
 - **Enhanced Multi-Provider Support**: Use Gemini for creativity, Kimi K2 for long context analysis
 - **Python Ecosystem**: Access to rich ML/AI libraries and better extensibility
 - **Modern Architecture**: Clean, async-first design with comprehensive testing
@@ -222,7 +262,7 @@ Our Python implementation aims to provide:
 - ✅ **API key management** with secure masking and environment variable support
 
 ### Phase 2: Core API Integration & Agentic Capabilities (Weeks 4-8)
-**Status**: ✅ **Phase 2.3 COMPLETE** - Enhanced Agentic AI Assistant Ready
+**Status**: ✅ **Phase 2.4 COMPLETE** - Specialized Subagents & Enhanced Agentic AI Assistant Ready
 
 #### 2.1 Gemini API Client ✅ COMPLETE
 - ✅ **Event-driven streaming system** - Complete streaming architecture with comprehensive event types
@@ -250,6 +290,14 @@ Our Python implementation aims to provide:
 - ✅ **Cross-Turn Memory**: Fixed interactive mode conversation history - AI remembers previous turns
 - ✅ **Enhanced System Prompts**: Updated system prompts to document new tools and usage patterns
 - ✅ **Tool Documentation**: Comprehensive tool usage guidelines similar to Gemini CLI
+
+#### 2.4 Specialized Subagents ✅ COMPLETE
+- ✅ **Automatic Task Delegation**: Pattern-based delegation to specialized AI assistants
+- ✅ **Code Review Specialist**: Expert code review with security focus and best practices validation
+- ✅ **Debug Specialist**: Systematic debugging methodology with root cause analysis
+- ✅ **Transparent Operation**: Clear indication when specialists are used ("🤖 Using ... specialist...")
+- ✅ **Zero Configuration**: Hardcoded built-in specialists with no external configuration needed
+- ✅ **Seamless Integration**: Works with existing agentic orchestrator and tool system
 
 ### Phase 3: Advanced Tool Ecosystem (Weeks 9-12)
 **Status**: 🔄 **Ready to Begin** - Agentic Foundation Complete
@@ -415,6 +463,9 @@ Our Python implementation aims to provide:
 | `web_fetch` | ✅ Working | Fetch and process content from URLs | "Summarize this article" → Fetches URL content and analyzes |
 | **Memory** | | | |
 | Cross-Turn Memory | ✅ Working | AI remembers previous turns in interactive mode | Turn 1: "Read file X", Turn 2: "What file did you read?" → "I read file X" |
+| **Subagents** | | | |
+| Code Review Specialist | ✅ Working | Automatic delegation for code review tasks with security-focused expertise | "Review auth.py for security issues" → Uses specialized code review system prompt |
+| Debug Specialist | ✅ Working | Automatic delegation for debugging tasks with systematic methodology | "Debug this AttributeError" → Uses systematic debugging system prompt |
 
 ### ✅ Core Architecture & Agentic AI Integration (Phase 2.2 Complete)
 
@@ -495,7 +546,7 @@ Our Python implementation aims to provide:
 - `groq` - Groq platform
 - `openrouter` - OpenRouter
 
-### ✅ Phase 2.3 Enhanced Agentic AI Features (Working Now!)
+### ✅ Phase 2.4 Specialized Agentic AI Features (Working Now!)
 
 - ✅ **Multi-Provider AI Integration**: Complete Google Gemini AND Kimi K2 API integration with streaming
 - ✅ **Full Agentic Capabilities**: AI can autonomously execute complex multi-step workflows
@@ -504,6 +555,8 @@ Our Python implementation aims to provide:
 - ✅ **Web Integration**: Real web search (`web_search`) and content fetching (`web_fetch`) with multiple API providers
 - ✅ **Cross-Turn Memory**: Fixed interactive mode - AI remembers previous turns and tool executions
 - ✅ **Enhanced System Prompts**: Comprehensive tool documentation and usage guidelines like Gemini CLI
+- ✅ **Specialized Subagents**: Automatic task delegation to expert AI assistants (code-reviewer, debug-specialist)
+- ✅ **Expert System Prompts**: Task-specific specialized prompts for code review and debugging scenarios
 - ✅ **Multi-step Tool Orchestration**: AI automatically chains tool calls to complete sophisticated tasks
 - ✅ **Real-time Tool Execution**: Live streaming of tool execution and results with comprehensive event system
 - ✅ **Intelligent Task Planning**: AI breaks down complex requests into sequential tool execution steps
@@ -667,6 +720,7 @@ This project will be licensed under the Apache 2.0 License, maintaining compatib
 This project is inspired by and aims to enhance upon Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli). We thank the Google Gemini team for their excellent work on the original implementation. 
 
 **Key Enhancements Over Original:**
+- **Specialized Subagents**: Unique automatic task delegation to expert AI specialists
 - **Multi-Provider Support**: Added Kimi K2 model integration alongside Gemini
 - **Python Ecosystem**: Modern Python architecture with rich AI/ML library access  
 - **Enhanced Configuration**: 6-layer hierarchical configuration with environment interpolation
