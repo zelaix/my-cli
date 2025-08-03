@@ -4,9 +4,9 @@ A Python-based AI command-line assistant inspired by Google's [Gemini CLI](https
 
 ## Project Status
 
-🎉 **Phase 2.2 Complete - Full Agentic AI Assistant Ready** 🎉
+🎉 **Phase 2.3 Complete - Enhanced Agentic AI Assistant** 🎉
 
-The project has successfully completed Phase 2.2 with a **complete agentic AI assistant** featuring **multi-step tool calling**, autonomous task execution, and sophisticated workflow orchestration - all built on top of our multi-provider foundation with Gemini AND Kimi K2 model support!
+The project has successfully completed Phase 2.3 with significant enhancements to our **agentic AI assistant**! New features include **advanced search tools** (`grep`, `glob`), **real web integration** (`web_search`, `web_fetch`), **cross-turn memory**, and **enhanced system prompts** - all built on top of our multi-provider foundation with Gemini AND Kimi K2 model support!
 
 ### Completed Work
 - ✅ Architecture analysis of original TypeScript Gemini CLI
@@ -19,6 +19,7 @@ The project has successfully completed Phase 2.2 with a **complete agentic AI as
 - ✅ **Phase 1.3**: Hierarchical configuration system
 - ✅ **Phase 2.1**: Multi-Provider AI Client with streaming & conversation management
 - ✅ **Phase 2.2**: Complete Agentic Tool System with multi-step workflows
+- ✅ **Phase 2.3**: Enhanced Tools & Memory (search tools, web integration, cross-turn memory)
 - ✅ **Multi-Provider Support**: Gemini AND Kimi K2 models with provider auto-detection
 - ✅ **Agentic Capabilities**: AI can autonomously execute complex multi-step tasks
 - ✅ Python package structure with proper module organization
@@ -37,11 +38,11 @@ The project has successfully completed Phase 2.2 with a **complete agentic AI as
 - ✅ **Package installation** via pip
 
 ### Current Status
-- 📋 **Phase**: 2.2 - Agentic AI Assistant ✅ **COMPLETE**
-- 🌟 **Unique Features**: **Multi-Provider Support** + **Full Agentic Capabilities**
-- 🎯 **Next Step**: Advanced Tool Ecosystem (Phase 3) - MCP Integration & Advanced Tools
+- 📋 **Phase**: 2.3 - Enhanced Agentic AI Assistant ✅ **COMPLETE**
+- 🌟 **Unique Features**: **Multi-Provider Support** + **Full Agentic Capabilities** + **Advanced Search & Web Tools**
+- 🎯 **Next Step**: Advanced Tool Ecosystem (Phase 3) - MCP Integration & Persistent Memory
 - 📅 **Goal**: Industry-leading agentic coding assistant with comprehensive tool ecosystem
-- 🏗️ **Current**: **Production-ready agentic AI assistant** with multi-step autonomous task execution
+- 🏗️ **Current**: **Production-ready enhanced agentic AI assistant** with search, web, and memory capabilities
 
 ### Quick Start
 
@@ -92,6 +93,12 @@ my-cli chat "Hello" --model gemini-2.0-flash-exp
 # Use Kimi K2 models (NEW!)
 MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Hello" --model kimi-k2-instruct
 MY_CLI_KIMI_API_KEY=your-kimi-key my-cli chat "Hello" --model kimi-k2-base
+
+# Try the new enhanced agentic capabilities (NEW!)
+my-cli chat "Search for all Python files in the src directory and read the main one"
+my-cli chat "Find all TODO comments in the codebase" 
+my-cli chat "Search the web for latest Python best practices"
+my-cli chat "Fetch content from https://docs.python.org/3/tutorial/"
 ```
 
 #### Development
@@ -114,19 +121,23 @@ My CLI is a Python-based **multi-provider agentic coding assistant** that brings
 - **Multi-Provider AI Support**: Choose between Gemini and Kimi K2 models based on your needs
 - **Full Agentic Workflow**: AI can autonomously execute complex multi-step tasks
 - **Built-in Core Tools**: File operations (`read_file`, `write_file`, `list_directory`, `edit_file`, `shell`)
+- **Advanced Search Tools**: Pattern matching (`grep`) and file discovery (`glob`) for efficient codebase exploration
+- **Web Integration**: Real web search (`web_search`) and content fetching (`web_fetch`) with multiple API providers
 - **Intelligent Tool Orchestration**: AI automatically chains tool calls to complete sophisticated workflows
+- **Cross-Turn Memory**: Full conversation history maintained across interactive sessions
 - **Real-time Streaming**: Live tool execution and AI reasoning with comprehensive event streams
 - **Advanced Configuration**: Hierarchical settings with environment variable interpolation
 - **Production-Ready**: Robust error handling, retry logic, and comprehensive testing
 
 ### 🎯 **Final Goal: Full Agentic Coding Assistant**
-- **File Operations**: Read, write, and edit code files with AI guidance
-- **Shell Integration**: Execute commands and build processes safely
-- **Codebase Analysis**: Understand large projects within extended context windows
+- ✅ **File Operations**: Read, write, and edit code files with AI guidance
+- ✅ **Shell Integration**: Execute commands and build processes safely
+- ✅ **Codebase Analysis**: Advanced search and file discovery with `grep` and `glob` tools
+- ✅ **Web Integration**: Real-time web search and content fetching capabilities
+- ✅ **Cross-Turn Memory**: Conversation continuity within interactive sessions
 - **Automated Workflows**: Handle complex development tasks like refactoring, testing, and deployment
 - **Tool Ecosystem**: Extensible plugin system for custom development tools
-- **Web Integration**: Search documentation and fetch external resources
-- **Memory System**: Persistent project context and conversation history
+- **Persistent Memory**: Cross-session project context and conversation history
 - **MCP Protocol**: Connect to external services and tools
 
 ### 🌟 **Why My CLI?**
@@ -211,7 +222,7 @@ Our Python implementation aims to provide:
 - ✅ **API key management** with secure masking and environment variable support
 
 ### Phase 2: Core API Integration & Agentic Capabilities (Weeks 4-8)
-**Status**: ✅ **Phase 2.2 COMPLETE** - Full Agentic AI Assistant Ready
+**Status**: ✅ **Phase 2.3 COMPLETE** - Enhanced Agentic AI Assistant Ready
 
 #### 2.1 Gemini API Client ✅ COMPLETE
 - ✅ **Event-driven streaming system** - Complete streaming architecture with comprehensive event types
@@ -233,11 +244,12 @@ Our Python implementation aims to provide:
 - ✅ **Streaming Integration**: Real-time tool execution with live progress updates and result streaming
 - ✅ **Conversation History Management**: Proper function call/response pairing in conversation history for multi-step workflows
 
-#### 2.3 Enhanced Conversation Features 🔄 Planned
-- Implement chat history persistence and memory
-- Add advanced conversation compression strategies
-- Create context window management with smart truncation
-- Port core system prompts and dynamic prompt construction
+#### 2.3 Enhanced Conversation Features ✅ COMPLETE
+- ✅ **Advanced Search Tools**: Complete `grep` and `glob` implementation for codebase exploration
+- ✅ **Web Integration**: Real `web_search` and `web_fetch` tools with multiple API providers (Serper, Tavily, Brave, Bing, NewsAPI)
+- ✅ **Cross-Turn Memory**: Fixed interactive mode conversation history - AI remembers previous turns
+- ✅ **Enhanced System Prompts**: Updated system prompts to document new tools and usage patterns
+- ✅ **Tool Documentation**: Comprehensive tool usage guidelines similar to Gemini CLI
 
 ### Phase 3: Advanced Tool Ecosystem (Weeks 9-12)
 **Status**: 🔄 **Ready to Begin** - Agentic Foundation Complete
@@ -248,11 +260,11 @@ Our Python implementation aims to provide:
 - **Server Discovery**: Automatic discovery and connection to MCP services
 - **OAuth Integration**: Secure authentication for remote MCP servers
 
-#### 3.2 Advanced Tools Implementation 🔄 Planned
-- **Web Integration**: `web_search`, `web_fetch` for research and documentation
-- **Advanced File Operations**: `grep`, `glob`, multi-file processing, batch operations
-- **Git Integration**: Version control operations and project management
-- **Search Tools**: Advanced search and filtering capabilities
+#### 3.2 Advanced Tools Implementation 🔄 In Progress
+- ✅ **Web Integration**: `web_search`, `web_fetch` for research and documentation
+- ✅ **Advanced File Operations**: `grep`, `glob` for efficient codebase exploration
+- 🔄 **Git Integration**: Version control operations and project management
+- 🔄 **Multi-file Processing**: Batch operations and advanced file handling
 
 #### 3.3 Tool Discovery & Safety 🔄 Planned
 - **Dynamic Tool Registration**: Command-based and MCP-based tool discovery
@@ -391,6 +403,19 @@ Our Python implementation aims to provide:
 | `my-cli chat` | ✅ Working | Interactive chat mode with commands (/help, /stats, /clear, /stream) |
 | `python -m my_cli` | ✅ Working | Module execution |
 
+### ✅ Enhanced Tool Capabilities (Phase 2.3 NEW!)
+
+| Tool | Status | Description | Example Usage by AI |
+|------|--------|-------------|---------------------|
+| **Search Tools** | | | |
+| `grep` | ✅ Working | Pattern matching in file contents with regex support | "Find all TODO comments" → Uses grep to search for "TODO" pattern |
+| `glob` | ✅ Working | File discovery with glob patterns | "List all Python files" → Uses glob "**/*.py" pattern |
+| **Web Tools** | | | |
+| `web_search` | ✅ Working | Real web search with multiple API providers (Serper, Tavily, Brave, Bing) | "Latest Python news" → Searches web and returns current results |
+| `web_fetch` | ✅ Working | Fetch and process content from URLs | "Summarize this article" → Fetches URL content and analyzes |
+| **Memory** | | | |
+| Cross-Turn Memory | ✅ Working | AI remembers previous turns in interactive mode | Turn 1: "Read file X", Turn 2: "What file did you read?" → "I read file X" |
+
 ### ✅ Core Architecture & Agentic AI Integration (Phase 2.2 Complete)
 
 | Component | Status | Description |
@@ -444,6 +469,12 @@ Our Python implementation aims to provide:
 | `MY_CLI_TIMEOUT` | `30` | Request timeout in seconds |
 | `MY_CLI_DEBUG` | `false` | Enable debug logging |
 | `MY_CLI_LOG_LEVEL` | `INFO` | Logging level |
+| **Web Search APIs** | | **Optional - for web_search tool** |
+| `SERPER_API_KEY` | None | Serper API key for Google Search (recommended) |
+| `TAVILY_API_KEY` | None | Tavily Search API key (AI-focused search) |
+| `BRAVE_API_KEY` | None | Brave Search API key |
+| `BING_SEARCH_API_KEY` | None | Bing Search API key |
+| `NEWS_API_KEY` | None | NewsAPI key for news searches |
 
 #### **Supported Models**
 
@@ -464,11 +495,15 @@ Our Python implementation aims to provide:
 - `groq` - Groq platform
 - `openrouter` - OpenRouter
 
-### ✅ Phase 2.2 Agentic AI Features (Working Now!)
+### ✅ Phase 2.3 Enhanced Agentic AI Features (Working Now!)
 
 - ✅ **Multi-Provider AI Integration**: Complete Google Gemini AND Kimi K2 API integration with streaming
 - ✅ **Full Agentic Capabilities**: AI can autonomously execute complex multi-step workflows
 - ✅ **Built-in Core Tools**: Complete implementation of `read_file`, `write_file`, `list_directory`, `edit_file`, `shell`
+- ✅ **Advanced Search Tools**: Pattern matching (`grep`) and file discovery (`glob`) for codebase exploration
+- ✅ **Web Integration**: Real web search (`web_search`) and content fetching (`web_fetch`) with multiple API providers
+- ✅ **Cross-Turn Memory**: Fixed interactive mode - AI remembers previous turns and tool executions
+- ✅ **Enhanced System Prompts**: Comprehensive tool documentation and usage guidelines like Gemini CLI
 - ✅ **Multi-step Tool Orchestration**: AI automatically chains tool calls to complete sophisticated tasks
 - ✅ **Real-time Tool Execution**: Live streaming of tool execution and results with comprehensive event system
 - ✅ **Intelligent Task Planning**: AI breaks down complex requests into sequential tool execution steps
@@ -484,12 +519,13 @@ Our Python implementation aims to provide:
 
 **Phase 3 - Advanced Tool Ecosystem (Next Priority)**
 - **MCP Integration**: Model Context Protocol support for external tool servers
-- **Advanced Tools**: Web search, multi-file operations, Git integration
+- **Git Integration**: Version control operations and project management
+- **Multi-file Processing**: Batch operations and advanced file handling
 - **Tool Discovery**: Dynamic registration and external tool development
 - **Advanced Safety**: Sandbox execution, permission systems, trust management
 
 **Phase 4+ - Extended Capabilities** 
-- **Memory System**: Persistent conversation history and project context
+- **Persistent Memory System**: Cross-session conversation history and project context
 - **Multimodal Support**: Image analysis, document parsing, visual understanding
 - **Automated Workflows**: Complex development task orchestration
 - **Enhanced UX**: Rich terminal interface, themes, and advanced features
