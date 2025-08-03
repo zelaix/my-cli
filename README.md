@@ -40,10 +40,13 @@ My CLI is an **intelligent command-line coding assistant** that brings the power
 
 ```bash
 # Clone the repository
-git clone https://github.com/zelaix/my-cli
+git clone https://github.com/zelaix/my-cli.git
 cd my-cli
 
 # Install the package in development mode
+conda create -n my-cli python=3.9
+conda activate my-cli
+pip install -r requirements.txt
 pip install -e ".[dev]"
 
 # Verify installation
