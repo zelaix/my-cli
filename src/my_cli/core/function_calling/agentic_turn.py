@@ -67,6 +67,7 @@ class AgenticTurnContext:
     generation_config: Optional[Dict[str, Any]] = None
     confirmation_handler: Optional[Callable] = None
     output_handler: Optional[Callable[[str], None]] = None
+    previous_conversation_history: Optional[List[Message]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -85,8 +86,8 @@ class AgenticTurn:
         self.id = str(uuid.uuid4())
         self.state = AgenticTurnState.PENDING
         
-        # Conversation and event tracking
-        self.conversation_history: List[Message] = []
+        # Conversation and event tracking - initialize with previous history if available
+        self.conversation_history: List[Message] = context.previous_conversation_history.copy() if context.previous_conversation_history else []
         self.pending_tool_calls: List[ToolCallRequestInfo] = []
         self.debug_responses: List[GenerateContentResponse] = []
         self.events: List[GeminiStreamEvent] = []

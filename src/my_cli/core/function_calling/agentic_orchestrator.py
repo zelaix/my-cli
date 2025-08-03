@@ -144,7 +144,7 @@ class AgenticOrchestrator:
         if not system_instruction:
             system_instruction = await self._prepare_system_instruction(message)
         
-        # Create turn context
+        # Create turn context with previous conversation history
         turn_context = AgenticTurnContext(
             prompt_id=f"turn-{self.total_turns}-{int(time.time())}",
             user_message=message,
@@ -154,7 +154,8 @@ class AgenticOrchestrator:
             tools=self.formatted_tools,
             system_instruction=system_instruction,
             confirmation_handler=self.confirmation_handler,
-            output_handler=self.output_handler
+            output_handler=self.output_handler,
+            previous_conversation_history=self.conversation_history.copy()
         )
         
         # Create and run agentic turn
