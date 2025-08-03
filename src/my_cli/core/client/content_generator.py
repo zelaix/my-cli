@@ -81,23 +81,22 @@ def convert_json_schema_to_gemini_schema(json_schema: Dict[str, Any]) -> genai.p
 
 def convert_function_schemas_to_gemini_tools(function_schemas: List[Dict[str, Any]]) -> List[genai.protos.Tool]:
     """Convert function schemas to Gemini Tool protobuf format."""
-    tools = []
+    if not function_schemas:
+        return []
     
+    # Create all function declarations
+    func_declarations = []
     for func_schema in function_schemas:
-        # Create function declaration
         func_declaration = genai.protos.FunctionDeclaration(
             name=func_schema["name"],
             description=func_schema["description"],
             parameters=convert_json_schema_to_gemini_schema(func_schema["parameters"])
         )
-        
-        # Create tool with this function
-        tool = genai.protos.Tool(
-            function_declarations=[func_declaration]
-        )
-        tools.append(tool)
+        func_declarations.append(func_declaration)
     
-    return tools
+    # Create a single tool with all function declarations
+    tool = genai.protos.Tool(function_declarations=func_declarations)
+    return [tool]
 
 # Re-export common types for backward compatibility
 ContentGenerator = BaseContentGenerator
@@ -222,13 +221,11 @@ class GeminiContentGenerator(BaseContentGenerator):
             # Prepare safety settings
             safety_settings = self.config.safety_settings or {}
             
-            # Create model
+            # Create model WITHOUT tools (tools will be passed per request like original Gemini CLI)
             self._client = genai.GenerativeModel(
                 model_name=self.config.model,
                 generation_config=generation_config,
-                safety_settings=safety_settings,
-                tools=self.config.tools,
-                tool_config=self.config.tool_config
+                safety_settings=safety_settings
             )
             
         except Exception as e:
@@ -373,7 +370,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             if config:
                 generation_config.update(config)
             
-            # Prepare tools if available (runtime tools take precedence)
+            # Prepare tools if available (matching original Gemini CLI pattern)
             effective_tools = None
             if tools is not None:
                 # Tools are already in Gemini API format from format_tools_for_gemini_api()
@@ -392,7 +389,6 @@ class GeminiContentGenerator(BaseContentGenerator):
                 # Use config tools as fallback
                 effective_tools = self.config.tools
             
-            # Generate response using the configured model
             # For now, if system_instruction is provided, prepend it as a user message
             # This is a fallback until we can identify the correct Gemini Python API parameter
             final_messages = gemini_messages
@@ -404,8 +400,7 @@ class GeminiContentGenerator(BaseContentGenerator):
                 self._client.generate_content,
                 final_messages,
                 generation_config=generation_config,
-                tools=effective_tools,
-                safety_settings=self.config.safety_settings
+                tools=effective_tools
             )
             
             # Extract parts from the response (including function calls)
@@ -469,6 +464,12 @@ class GeminiContentGenerator(BaseContentGenerator):
             if not gemini_messages:
                 return
             
+            # Debug: Log gemini messages for debugging function response format
+            import json
+            logger.debug(f"🔍 Gemini messages being sent (streaming):")
+            for i, msg in enumerate(gemini_messages):
+                logger.debug(f"  Message {i+1}: {json.dumps(msg, indent=2)}")
+            
             # Prepare generation config
             generation_config = {
                 "temperature": self.config.temperature,
@@ -479,7 +480,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             if config:
                 generation_config.update(config)
             
-            # Prepare tools if available (runtime tools take precedence)
+            # Prepare tools if available (matching original Gemini CLI pattern)
             effective_tools = None
             if tools is not None:
                 # Tools are already in Gemini API format from format_tools_for_gemini_api()
@@ -511,7 +512,6 @@ class GeminiContentGenerator(BaseContentGenerator):
                     final_messages,
                     generation_config=generation_config,
                     tools=effective_tools,
-                    safety_settings=self.config.safety_settings,
                     stream=True
                 )
             
@@ -617,23 +617,23 @@ class GeminiContentGenerator(BaseContentGenerator):
         return gemini_messages
     
     def set_tools(self, tools: List[Dict[str, Any]]) -> None:
-        """Set the available tools for function calling, converting from JSON to Gemini protobuf format."""
+        """Set the available tools for function calling."""
+        # Store tools in config for use in API calls (matching original Gemini CLI approach)
         if not tools:
             self.config.tools = None
-            return
-        
-        # Extract function schemas from the tools format
-        function_schemas = []
-        for tool_group in tools:
-            if "functionDeclarations" in tool_group:
-                function_schemas.extend(tool_group["functionDeclarations"])
-        
-        if function_schemas:
-            # Convert JSON schemas to Gemini protobuf format
-            gemini_tools = convert_function_schemas_to_gemini_tools(function_schemas)
-            self.config.tools = gemini_tools
         else:
-            self.config.tools = None
+            # Extract function schemas from the tools format and store for later use
+            function_schemas = []
+            for tool_group in tools:
+                if "functionDeclarations" in tool_group:
+                    function_schemas.extend(tool_group["functionDeclarations"])
+            
+            if function_schemas:
+                # Convert JSON schemas to Gemini protobuf format and store
+                gemini_tools = convert_function_schemas_to_gemini_tools(function_schemas)
+                self.config.tools = gemini_tools
+            else:
+                self.config.tools = None
 
 
 # Factory functions

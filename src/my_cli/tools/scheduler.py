@@ -296,16 +296,19 @@ class CoreToolScheduler:
                 update_callback
             )
             
-            # Create success response
+            # Create success response using proper conversion (matching original Gemini CLI)
+            from ..core.function_calling.function_response_converter import convert_to_function_response
+            
+            # Use the same pattern as original CoreToolScheduler.ts line 673-677
+            converted_response = convert_to_function_response(
+                call.request.name,  # toolName
+                call.request.call_id,  # callId  
+                result.llm_content  # toolResult.llmContent
+            )
+            
             response = ToolCallResponseInfo(
                 call_id=call.request.call_id,
-                response_parts={
-                    "function_response": {
-                        "id": call.request.call_id,
-                        "name": call.request.name,
-                        "response": {"output": result.llm_content}
-                    }
-                },
+                response_parts=converted_response,
                 result_display=ToolResultDisplay() if result.return_display else None,
                 error=None
             )

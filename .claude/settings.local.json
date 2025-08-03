@@ -5,7 +5,19 @@
       "Bash(mv:*)",
       "Bash(my-cli:*)",
       "Bash(python:*)",
-      "Bash(MY_CLI_API_KEY=\"fake-key-for-testing\" python -m my_cli chat --model gemini-2.0-flash \"what does this project do?\")"
+      "Bash(MY_CLI_API_KEY=\"fake-key-for-testing\" python -m my_cli chat --model gemini-2.0-flash \"what does this project do?\")",
+      "Bash(MY_CLI_DEBUG=true my-cli chat --model gemini-2.0-flash-exp \"List the files in the current directory\")",
+      "Bash(MY_CLI_LOG_LEVEL=DEBUG my-cli chat --model gemini-2.0-flash-exp \"List the files in the current directory\")",
+      "Bash(export MY_CLI_LOG_LEVEL=DEBUG)",
+      "Bash(timeout:*)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY timeout 10s python debug_simple_chat.py)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_function_response.py)",
+      "Bash(touch:*)",
+      "Bash(MY_CLI_LOG_LEVEL=DEBUG my-cli chat --tools --model gemini-2.0-flash-exp \"List the files in the current directory\")",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python test_function_calling.py)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python test_multi_step_function_calling.py)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_conversation_history.py)",
+      "Bash(export MY_CLI_API_KEY=$MY_CLI_API_KEY)"
     ],
     "deny": []
   }

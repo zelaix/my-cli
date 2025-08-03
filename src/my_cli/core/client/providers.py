@@ -195,6 +195,31 @@ class GenerateContentResponse(BaseModel):
         return tool_calls
     
     @property
+    def function_calls(self) -> List[Dict[str, Any]]:
+        """Get any function calls from the response in native Gemini format (matching original Gemini CLI)."""
+        function_calls = []
+        if self.candidates:
+            candidate = self.candidates[0]
+            content = candidate.content
+            if content and "parts" in content:
+                call_counter = 1
+                for part in content["parts"]:
+                    if isinstance(part, dict) and "function_call" in part:
+                        func_call = part["function_call"]
+                        # Preserve original ID if it exists, otherwise generate one (matching original Turn.ts pattern)
+                        original_id = func_call.get("id")
+                        generated_id = f"call_{call_counter:03d}"
+                        
+                        gemini_format = {
+                            "id": original_id if original_id else generated_id,
+                            "name": func_call.get("name", ""),
+                            "args": func_call.get("args", {})
+                        }
+                        function_calls.append(gemini_format)
+                        call_counter += 1
+        return function_calls
+    
+    @property
     def has_content(self) -> bool:
         """Check if this response has any content (text or function calls)."""
         return bool(self.text or self.tool_calls)

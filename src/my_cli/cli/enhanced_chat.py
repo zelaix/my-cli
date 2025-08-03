@@ -18,6 +18,7 @@ from ..core.function_calling import (
     ConversationOrchestrator,
     create_confirmation_handler
 )
+from ..core.function_calling.agentic_orchestrator import AgenticOrchestrator
 from ..config.settings import MyCliSettings
 
 console = Console()
@@ -89,8 +90,8 @@ async def enhanced_chat_command(
                 # Generate function schemas and set tools on client
                 if target_model.startswith("gemini-"):
                     # Use Gemini-compatible schema generator
-                    from ..core.function_calling.gemini_schema_generator import generate_all_gemini_function_schemas
-                    schemas = generate_all_gemini_function_schemas(tool_registry)
+                    from ..core.function_calling.gemini_schema_generator import generate_all_gemini_function_declarations
+                    schemas = generate_all_gemini_function_declarations(tool_registry)
                 else:
                     # Use general schema generator
                     from ..core.function_calling import generate_all_function_schemas
@@ -105,8 +106,8 @@ async def enhanced_chat_command(
                     auto_confirm=auto_confirm_tools
                 )
                 
-                # Create conversation orchestrator
-                orchestrator = ConversationOrchestrator(
+                # Create agentic orchestrator for multi-step tool calling
+                orchestrator = AgenticOrchestrator(
                     content_generator=client,
                     tool_registry=tool_registry,
                     config=config,
@@ -152,40 +153,33 @@ async def _send_enhanced_message(
     enable_tools: bool,
     show_user_message: bool = True
 ) -> None:
-    """Send a single message with tool support."""
+    """Send a single message with agentic tool support."""
     if show_user_message:
         console.print(f"[yellow]You:[/yellow] {message}")
     
     if enable_tools and hasattr(orchestrator_or_client, 'send_message'):
-        # Use orchestrator for tool-enabled conversation
-        if stream:
-            # Print AI prefix before streaming starts (with newline to separate from user prompt)
-            console.print("\n[blue]AI:[/blue] ", end="")
+        # Use agentic orchestrator for multi-step tool-enabled conversation
+        console.print("\n[blue]AI:[/blue] ", end="")
         
-        turn = await orchestrator_or_client.send_message(
+        # Stream the complete agentic conversation
+        tool_calls_made = 0
+        async for event in orchestrator_or_client.send_message(
             message,
             stream=stream,
             auto_confirm_tools=auto_confirm_tools
-        )
+        ):
+            # The output_handler in the orchestrator already handles content display
+            # Just track tool calls for statistics
+            if event.type.value == "tool_call_request":
+                tool_calls_made += 1
         
-        if stream:
-            # Add consistent newline after streaming response
-            # Check if response already ends with newline to avoid double newlines
-            response_text = turn.final_ai_response or ""
-            if response_text and not response_text.endswith('\n'):
-                console.print("\n")  # Add newline if response doesn't have one
-            else:
-                console.print()  # Just print empty line for consistent spacing
-        
-        # Show final AI response only for non-streaming mode
-        # (In streaming mode, orchestrator already printed response via output_handler)
-        if turn.final_ai_response and not stream:
-            console.print(f"[blue]AI:[/blue] {turn.final_ai_response}\n")
+        # Add final newline
+        console.print("\n")
         
         # Show conversation stats if tools were used
-        if turn.function_calls:
-            stats = orchestrator_or_client.get_conversation_stats()
-            console.print(f"\n[dim]Tools used: {len(turn.function_calls)}, Total tools available: {stats['available_tools']}[/dim]")
+        if tool_calls_made > 0:
+            stats = orchestrator_or_client.get_statistics()
+            console.print(f"[dim]🔧 Tools executed: {tool_calls_made} | Success rate: {stats['success_rate']:.1%} | Available: {stats['available_tools']}[/dim]\n")
     
     else:
         # Use regular client without tools
@@ -231,8 +225,8 @@ async def _interactive_enhanced_chat(
                 continue
             
             elif user_input.lower().strip() == "/stats":
-                if enable_tools and hasattr(orchestrator_or_client, 'get_conversation_stats'):
-                    stats = orchestrator_or_client.get_conversation_stats()
+                if enable_tools and hasattr(orchestrator_or_client, 'get_statistics'):
+                    stats = orchestrator_or_client.get_statistics()
                     _show_conversation_stats(stats)
                 else:
                     console.print("[dim]Stats not available in this mode[/dim]")
@@ -311,14 +305,15 @@ def _show_conversation_stats(stats: dict) -> None:
     
     table = Table(show_header=False, box=None)
     table.add_row("[bold]Total Turns:[/bold]", str(stats.get('total_turns', 0)))
-    table.add_row("[bold]Turns with Tools:[/bold]", str(stats.get('turns_with_tools', 0)))
     table.add_row("[bold]Total Tool Calls:[/bold]", str(stats.get('total_tool_calls', 0)))
     table.add_row("[bold]Successful Tool Calls:[/bold]", str(stats.get('successful_tool_calls', 0)))
+    table.add_row("[bold]Success Rate:[/bold]", f"{stats.get('success_rate', 0):.1%}")
     table.add_row("[bold]Available Tools:[/bold]", str(stats.get('available_tools', 0)))
+    table.add_row("[bold]Active Turn:[/bold]", "Yes" if stats.get('current_turn_active', False) else "No")
     
     panel = Panel(
         table,
-        title="📊 Conversation Statistics",
+        title="📊 Agentic Conversation Statistics",
         title_align="left",
         border_style="green"
     )
