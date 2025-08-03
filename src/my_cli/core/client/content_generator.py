@@ -238,7 +238,8 @@ class GeminiContentGenerator(BaseContentGenerator):
         self,
         messages: List[Message],
         config: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> GenerateContentResponse:
         """Generate content using Gemini API."""
         if not self._initialized:
@@ -250,7 +251,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             
             # Execute with retry logic
             response = await self.retry_manager.retry(
-                lambda: self._generate_content_impl(gemini_messages, config, tools),
+                lambda: self._generate_content_impl(gemini_messages, config, tools, system_instruction),
                 model=self.config.model
             )
             
@@ -265,7 +266,8 @@ class GeminiContentGenerator(BaseContentGenerator):
         self,
         messages: List[Message],
         config: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Generate content with streaming response."""
         if not self._initialized:
@@ -277,7 +279,7 @@ class GeminiContentGenerator(BaseContentGenerator):
             
             # Execute streaming with retry logic
             async def stream_generator():
-                async for chunk in self._generate_content_stream_impl(gemini_messages, config, tools):
+                async for chunk in self._generate_content_stream_impl(gemini_messages, config, tools, system_instruction):
                     yield chunk
             
             # Note: Retry logic for streaming is more complex and may need special handling
@@ -353,7 +355,8 @@ class GeminiContentGenerator(BaseContentGenerator):
         self,
         gemini_messages: List[Dict[str, Any]],
         config: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> GenerateContentResponse:
         """Internal implementation of content generation."""
         try:
@@ -373,16 +376,33 @@ class GeminiContentGenerator(BaseContentGenerator):
             # Prepare tools if available (runtime tools take precedence)
             effective_tools = None
             if tools is not None:
-                # Use runtime provided tools
-                effective_tools = convert_function_schemas_to_gemini_tools(tools)
+                # Tools are already in Gemini API format from format_tools_for_gemini_api()
+                # Extract function declarations and convert to protobuf format
+                function_declarations = []
+                for tool_group in tools:
+                    if isinstance(tool_group, dict) and "functionDeclarations" in tool_group:
+                        function_declarations.extend(tool_group["functionDeclarations"])
+                
+                if function_declarations:
+                    effective_tools = convert_function_schemas_to_gemini_tools(function_declarations)
+                else:
+                    # Fallback: assume tools are already function declarations
+                    effective_tools = convert_function_schemas_to_gemini_tools(tools)
             elif self.config.tools:
                 # Use config tools as fallback
                 effective_tools = self.config.tools
             
             # Generate response using the configured model
+            # For now, if system_instruction is provided, prepend it as a user message
+            # This is a fallback until we can identify the correct Gemini Python API parameter
+            final_messages = gemini_messages
+            if system_instruction:
+                system_message = {"role": "user", "parts": [{"text": system_instruction}]}
+                final_messages = [system_message] + gemini_messages
+            
             response = await asyncio.to_thread(
                 self._client.generate_content,
-                gemini_messages,
+                final_messages,
                 generation_config=generation_config,
                 tools=effective_tools,
                 safety_settings=self.config.safety_settings
@@ -441,7 +461,8 @@ class GeminiContentGenerator(BaseContentGenerator):
         self,
         gemini_messages: List[Dict[str, Any]],
         config: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Internal implementation of streaming content generation."""
         try:
@@ -461,16 +482,33 @@ class GeminiContentGenerator(BaseContentGenerator):
             # Prepare tools if available (runtime tools take precedence)
             effective_tools = None
             if tools is not None:
-                # Use runtime provided tools
-                effective_tools = convert_function_schemas_to_gemini_tools(tools)
+                # Tools are already in Gemini API format from format_tools_for_gemini_api()
+                # Extract function declarations and convert to protobuf format
+                function_declarations = []
+                for tool_group in tools:
+                    if isinstance(tool_group, dict) and "functionDeclarations" in tool_group:
+                        function_declarations.extend(tool_group["functionDeclarations"])
+                
+                if function_declarations:
+                    effective_tools = convert_function_schemas_to_gemini_tools(function_declarations)
+                else:
+                    # Fallback: assume tools are already function declarations
+                    effective_tools = convert_function_schemas_to_gemini_tools(tools)
             elif self.config.tools:
                 # Use config tools as fallback
                 effective_tools = self.config.tools
             
             # Generate streaming response
             def _stream_generate():
+                # For now, if system_instruction is provided, prepend it as a user message
+                # This is a fallback until we can identify the correct Gemini Python API parameter
+                final_messages = gemini_messages
+                if system_instruction:
+                    system_message = {"role": "user", "parts": [{"text": system_instruction}]}
+                    final_messages = [system_message] + gemini_messages
+                
                 return self._client.generate_content(
-                    gemini_messages,
+                    final_messages,
                     generation_config=generation_config,
                     tools=effective_tools,
                     safety_settings=self.config.safety_settings,

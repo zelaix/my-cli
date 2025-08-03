@@ -267,5 +267,7 @@ def should_continue_conversation(
     Returns:
         True if conversation should continue with AI response
     """
-    # Continue if we have successful tool executions
+    # Always continue after tool execution to let the AI decide if the task is complete.
+    # This matches the original Gemini CLI behavior where the AI continues until
+    # it determines the user's query is fully resolved.
     return any(result.success for result in execution_results)

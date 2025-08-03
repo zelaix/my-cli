@@ -17,8 +17,10 @@ from .result_processor import (
 )
 from ...tools.registry import ToolRegistry  
 from ...tools.types import ToolConfirmationOutcome, ToolCallConfirmationDetails
-from ..client.providers import BaseContentGenerator, GenerateContentResponse, GenerationCandidate
+from ..client.providers import BaseContentGenerator, GenerateContentResponse, GenerationCandidate, ModelProvider
 from ..client.turn import Message, MessageRole, MessagePart
+from ..prompts.system_prompt import get_core_system_prompt, load_workspace_context
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,9 @@ class ConversationOrchestrator:
         
         # Generate function schemas for AI (use native Gemini format)
         self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
+        # Convert to Gemini tools format for content generator
+        from .gemini_schema_generator import format_tools_for_gemini_api
+        self.gemini_tools = format_tools_for_gemini_api(self.function_schemas)
         
         # Store provider type for runtime decisions
         self.provider_type = content_generator.provider.value
@@ -116,18 +121,18 @@ class ConversationOrchestrator:
         self.conversation_history.append(user_message)
         
         try:
-            # Prepare messages for AI (no longer modifying content generator config)
-            messages = self.conversation_history.copy()
+            # Prepare messages and system instruction
+            messages, system_instruction = await self._prepare_messages_and_system_instruction(user_query=message)
             
             if stream:
                 # Handle streaming response with tools
                 turn = await self._handle_streaming_response(
-                    messages, turn, auto_confirm_tools
+                    messages, turn, auto_confirm_tools, system_instruction
                 )
             else:
                 # Handle non-streaming response with tools
                 turn = await self._handle_non_streaming_response(
-                    messages, turn, auto_confirm_tools
+                    messages, turn, auto_confirm_tools, system_instruction
                 )
             
             # Add turn to history
@@ -145,7 +150,8 @@ class ConversationOrchestrator:
         self,
         messages: List[Message],
         turn: ConversationTurn,
-        auto_confirm_tools: bool
+        auto_confirm_tools: bool,
+        system_instruction: Optional[str] = None
     ) -> ConversationTurn:
         """Handle streaming AI response with tool calls."""
         response_text = ""
@@ -155,7 +161,8 @@ class ConversationOrchestrator:
         # Collect streaming response with tools available
         async for chunk in self.content_generator.generate_content_stream(
             messages, 
-            tools=self.function_schemas
+            tools=self.gemini_tools,
+            system_instruction=system_instruction
         ):
             response_chunks.append(chunk)
             
@@ -225,7 +232,7 @@ class ConversationOrchestrator:
                 
                 # Execute tools and continue conversation
                 turn = await self._execute_tools_and_continue(
-                    turn, auto_confirm_tools, stream=True
+                    turn, auto_confirm_tools, stream=True, system_instruction=system_instruction
                 )
             else:
                 # No tools, just regular response
@@ -243,12 +250,14 @@ class ConversationOrchestrator:
         self,
         messages: List[Message],
         turn: ConversationTurn,
-        auto_confirm_tools: bool
+        auto_confirm_tools: bool,
+        system_instruction: Optional[str] = None
     ) -> ConversationTurn:
         """Handle non-streaming AI response with tool calls."""
         response = await self.content_generator.generate_content(
             messages, 
-            tools=self.function_schemas
+            tools=self.gemini_tools,
+            system_instruction=system_instruction
         )
         turn.ai_response = response
         
@@ -274,7 +283,7 @@ class ConversationOrchestrator:
             
             # Execute tools and continue conversation
             turn = await self._execute_tools_and_continue(
-                turn, auto_confirm_tools, stream=False
+                turn, auto_confirm_tools, stream=False, system_instruction=system_instruction
             )
         else:
             # No tools, just regular response
@@ -291,7 +300,8 @@ class ConversationOrchestrator:
         self,
         turn: ConversationTurn,
         auto_confirm_tools: bool,
-        stream: bool
+        stream: bool,
+        system_instruction: Optional[str] = None
     ) -> ConversationTurn:
         """
         Execute tools and get AI's final response.
@@ -300,6 +310,7 @@ class ConversationOrchestrator:
             turn: Current conversation turn
             auto_confirm_tools: Whether to auto-confirm tools
             stream: Whether to use streaming for final response
+            system_instruction: Optional system instruction for AI response
             
         Returns:
             Updated conversation turn
@@ -349,7 +360,8 @@ class ConversationOrchestrator:
                     response_text = ""
                     async for chunk in self.content_generator.generate_content_stream(
                         messages_with_results, 
-                        tools=self.function_schemas
+                        tools=self.gemini_tools,
+                        system_instruction=system_instruction
                     ):
                         if chunk.has_content and chunk.text:
                             response_text += chunk.text
@@ -366,7 +378,8 @@ class ConversationOrchestrator:
                 else:
                     response = await self.content_generator.generate_content(
                         messages_with_results, 
-                        tools=self.function_schemas
+                        tools=self.gemini_tools,
+                        system_instruction=system_instruction
                     )
                     turn.final_ai_response = response.text
                     # Add final response to history
@@ -385,6 +398,33 @@ class ConversationOrchestrator:
             turn.final_ai_response = "\n\n".join(outputs) if outputs else "Tool execution completed."
         
         return turn
+    
+    async def _prepare_messages_and_system_instruction(self, user_query: Optional[str] = None) -> tuple[List[Message], Optional[str]]:
+        """Prepare conversation messages and system instruction separately for Gemini's native support."""
+        # Load workspace context
+        workspace_context = load_workspace_context(Path.cwd())
+        
+        # Get available tool names
+        available_tools = [tool.name for tool in self.tool_registry.get_all_tools()]
+        
+        # Generate system prompt/instruction
+        system_instruction = get_core_system_prompt(
+            workspace_context=workspace_context,
+            available_tools=available_tools,
+            user_query=user_query
+        )
+        
+        # For Gemini, return messages without system prompt and system instruction separately
+        if self.content_generator.provider == ModelProvider.GEMINI:
+            return self.conversation_history.copy(), system_instruction
+        else:
+            # For other providers, include system prompt as USER message in conversation history
+            system_message = Message(
+                role=MessageRole.USER,  # Use USER role for compatibility
+                parts=[MessagePart(text=system_instruction)]
+            )
+            messages = [system_message] + self.conversation_history.copy()
+            return messages, None
     
     def _get_function_schemas_for_provider(self) -> Optional[List[Dict[str, Any]]]:
         """Get function schemas formatted for the current provider."""

@@ -58,6 +58,12 @@ class ReadFileTool(ReadOnlyTool):
         if not absolute_path:
             return "absolute_path parameter is required"
         
+        # Convert relative paths to absolute paths
+        if not os.path.isabs(absolute_path):
+            absolute_path = os.path.abspath(absolute_path)
+            # Update the params with the absolute path
+            params["absolute_path"] = absolute_path
+        
         # Validate workspace path
         workspace_error = self._validate_workspace_path(absolute_path)
         if workspace_error:
