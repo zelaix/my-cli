@@ -27,6 +27,10 @@ from .search import (
     GrepTool,
     GlobTool
 )
+from .web import (
+    WebFetchTool,
+    GoogleWebSearchTool
+)
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +262,9 @@ class ToolRegistry:
             (WriteFileTool, "Writes files with atomic operations and backup"),
             (EditFileTool, "Edits files with diff preview and precise modifications"),
             (GrepTool, "Searches for patterns within file contents using regex"),
-            (GlobTool, "Finds files matching glob patterns")
+            (GlobTool, "Finds files matching glob patterns"),
+            (WebFetchTool, "Fetches and processes content from web URLs"),
+            (GoogleWebSearchTool, "Performs web searches using Google Search")
         ]
         
         for tool_class, description in builtin_tools:

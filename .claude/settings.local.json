@@ -38,7 +38,8 @@
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"hello\")",
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"Use the grep tool to search for ''import'' pattern in the current directory\")",
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"Use the glob tool to find all Python files in the src directory\")",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 10s my-cli chat --model kimi-k2-base \"Use google_web_search to search for ''''Python tutorial''''\")"
     ],
     "deny": []
   }
