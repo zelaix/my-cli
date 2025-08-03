@@ -83,10 +83,8 @@ class ShellTool(ModifyingTool):
         if not command or not command.strip():
             return "command parameter is required and cannot be empty"
         
-        # Check for dangerous commands
-        command_root = self._get_command_root(command.strip())
-        if command_root in self.DANGEROUS_COMMANDS:
-            return f"Command '{command_root}' is not allowed for security reasons"
+        # Note: We don't reject dangerous commands in validation
+        # They will be handled by the confirmation system
         
         # Validate directory if provided
         directory = params.get("directory")
@@ -148,14 +146,26 @@ class ShellTool(ModifyingTool):
         command = params["command"].strip()
         command_root = self._get_command_root(command)
         
+        # Store current command for confirmation callback
+        self._current_command = command
+        
         # Skip confirmation for safe commands or already approved commands
         if command_root in self.SAFE_COMMANDS or command_root in self.allowlist:
             return False
         
+        # Determine confirmation type based on danger level
+        if command_root in self.DANGEROUS_COMMANDS:
+            title = "⚠️  DANGEROUS Command Detected"
+            description = f"This command is potentially dangerous: {command}\nCommand '{command_root}' can cause system damage or data loss."
+        else:
+            title = "Confirm Shell Command"
+            description = f"Execute shell command: {command}"
+        
         # Create confirmation details
         confirmation = ToolExecuteConfirmationDetails(
-            title="Confirm Shell Command",
-            description=f"Execute shell command: {command}",
+            type="exec",
+            title=title,
+            description=description,
             command=command,
             root_command=command_root,
             on_confirm=self._handle_confirmation

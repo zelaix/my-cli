@@ -33,7 +33,9 @@
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_tool_schema.py)",
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_raw_streaming.py)",
       "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_non_streaming.py)",
-      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"list the current directory\")"
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"list the current directory\")",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"hello\" --debug)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"hello\")"
     ],
     "deny": []
   }

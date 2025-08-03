@@ -110,7 +110,7 @@ class AgenticTurn:
             from types import SimpleNamespace
             config = SimpleNamespace()
             config.settings = SimpleNamespace()
-            config.settings.auto_confirm = True  # Auto-confirm tools for agentic operation
+            config.settings.auto_confirm = False  # Require user confirmation for safety
             
             self.tool_scheduler = CoreToolScheduler(
                 tool_registry=dict(context.tool_registry._tools),

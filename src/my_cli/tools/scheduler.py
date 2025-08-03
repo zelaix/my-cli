@@ -16,6 +16,7 @@ from .types import (
     ToolResult,
     ToolResultDisplay
 )
+from ..ui.confirmation import ConfirmationInterface
 # Avoid circular import
 
 
@@ -57,6 +58,8 @@ class CoreToolScheduler:
         self.on_all_tool_calls_complete = on_all_tool_calls_complete
         self.on_tool_calls_update = on_tool_calls_update
         self._abort_signal = asyncio.Event()
+        self.confirmation_interface = ConfirmationInterface()
+        self.allowlist: Dict[str, set] = {}  # tool_name -> set of allowed commands/patterns
     
     def _create_error_response(
         self,
@@ -188,19 +191,30 @@ class CoreToolScheduler:
                 if getattr(self.config.settings, 'auto_confirm', False):
                     self._set_status(call.request.call_id, ToolCallStatus.SCHEDULED)
                 else:
-                    confirmation = await call.tool.should_confirm_execute(
-                        call.request.args,
-                        self._abort_signal
-                    )
-                    
-                    if confirmation and isinstance(confirmation, ToolCallConfirmationDetails):
-                        self._set_status(
-                            call.request.call_id,
-                            ToolCallStatus.AWAITING_APPROVAL,
-                            confirmation_details=confirmation
-                        )
-                    else:
+                    # Check if already allowed by previous approval
+                    if self._is_operation_allowed(call.tool.name, call.request.args):
                         self._set_status(call.request.call_id, ToolCallStatus.SCHEDULED)
+                    else:
+                        confirmation = await call.tool.should_confirm_execute(
+                            call.request.args,
+                            self._abort_signal
+                        )
+                        
+                        if confirmation and isinstance(confirmation, ToolCallConfirmationDetails):
+                            # Set to awaiting approval and show confirmation dialog
+                            self._set_status(
+                                call.request.call_id,
+                                ToolCallStatus.AWAITING_APPROVAL,
+                                confirmation_details=confirmation
+                            )
+                            
+                            # Show confirmation dialog and get user decision
+                            outcome = self.confirmation_interface.show_confirmation_dialog(confirmation)
+                            
+                            # Handle the user's decision
+                            await self._handle_confirmation_outcome(call.request.call_id, outcome, confirmation)
+                        else:
+                            self._set_status(call.request.call_id, ToolCallStatus.SCHEDULED)
             
             except Exception as e:
                 self._set_status(
@@ -211,6 +225,112 @@ class CoreToolScheduler:
         
         # Attempt to execute scheduled calls
         await self._execute_scheduled_calls()
+    
+    def _is_operation_allowed(self, tool_name: str, args: Dict[str, Any]) -> bool:
+        """Check if operation is already allowed by previous approval."""
+        if tool_name not in self.allowlist:
+            return False
+        
+        allowed_patterns = self.allowlist[tool_name]
+        
+        # For shell commands, check if command is in allowlist
+        if tool_name == "run_shell_command" and "command" in args:
+            command = args["command"]
+            # Simple command root matching (could be more sophisticated)
+            command_root = command.split()[0] if command.split() else ""
+            return command_root in allowed_patterns
+        
+        # For file operations, check if file pattern is in allowlist  
+        if "file_path" in args:
+            file_path = args["file_path"]
+            return file_path in allowed_patterns
+        
+        # For other tools, check if entire operation signature is allowed
+        operation_signature = f"{tool_name}({str(sorted(args.items()))})"
+        return operation_signature in allowed_patterns
+    
+    def _add_to_allowlist(self, tool_name: str, args: Dict[str, Any]) -> None:
+        """Add operation to allowlist for future auto-approval."""
+        if tool_name not in self.allowlist:
+            self.allowlist[tool_name] = set()
+        
+        if tool_name == "run_shell_command" and "command" in args:
+            command = args["command"]
+            command_root = command.split()[0] if command.split() else ""
+            self.allowlist[tool_name].add(command_root)
+        elif "file_path" in args:
+            self.allowlist[tool_name].add(args["file_path"])
+        else:
+            operation_signature = f"{tool_name}({str(sorted(args.items()))})"
+            self.allowlist[tool_name].add(operation_signature)
+    
+    async def _handle_confirmation_outcome(
+        self,
+        call_id: str,
+        outcome: ToolConfirmationOutcome,
+        confirmation_details: ToolCallConfirmationDetails
+    ) -> None:
+        """Handle the outcome of user confirmation."""
+        call = next(
+            (c for c in self.tool_calls if c.request.call_id == call_id),
+            None
+        )
+        
+        if not call:
+            return
+        
+        # Update the call with the outcome
+        call.outcome = outcome
+        
+        if outcome == ToolConfirmationOutcome.CANCEL:
+            # User cancelled - mark as cancelled
+            self.confirmation_interface.show_cancellation_message()
+            self._set_status(
+                call_id,
+                ToolCallStatus.CANCELLED,
+                response=self._create_cancellation_response(call.request)
+            )
+        
+        elif outcome in [ToolConfirmationOutcome.PROCEED_ONCE, ToolConfirmationOutcome.PROCEED_ALWAYS]:
+            # User approved - proceed with execution
+            self.confirmation_interface.show_approval_message(outcome)
+            
+            # If "always allow", add to allowlist
+            if outcome == ToolConfirmationOutcome.PROCEED_ALWAYS:
+                self._add_to_allowlist(call.tool.name, call.request.args)
+                
+                # Execute onConfirm callback if provided
+                if confirmation_details.on_confirm:
+                    if asyncio.iscoroutinefunction(confirmation_details.on_confirm):
+                        await confirmation_details.on_confirm(outcome)
+                    else:
+                        confirmation_details.on_confirm(outcome)
+            
+            # Schedule for execution
+            self._set_status(call_id, ToolCallStatus.SCHEDULED)
+        
+        else:
+            # Other outcomes (like MODIFY_WITH_EDITOR) - for now, cancel
+            self.confirmation_interface.show_cancellation_message()
+            self._set_status(
+                call_id,
+                ToolCallStatus.CANCELLED,
+                response=self._create_cancellation_response(call.request)
+            )
+    
+    def _create_cancellation_response(self, request: ToolCallRequestInfo) -> ToolCallResponseInfo:
+        """Create a response for cancelled operations."""
+        return ToolCallResponseInfo(
+            call_id=request.call_id,
+            response_parts={
+                "function_response": {
+                    "id": request.call_id,
+                    "name": request.name,
+                    "response": {"error": "[Operation Cancelled] User did not approve the operation"}
+                }
+            },
+            error=None
+        )
     
     async def handle_confirmation(
         self,
