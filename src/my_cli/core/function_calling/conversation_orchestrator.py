@@ -317,7 +317,15 @@ class ConversationOrchestrator:
         """
         # Execute function calls
         if self.output_handler:
-            self.output_handler("\n\n🔧 Executing tools...\n")
+            if len(turn.function_calls) == 1:
+                call = turn.function_calls[0]
+                args_str = ", ".join(f"{k}={repr(v)}" for k, v in call.arguments.items()) if call.arguments else "no args"
+                self.output_handler(f"\n\n🔧 Executing tool: {call.name}({args_str})\n")
+            else:
+                self.output_handler(f"\n\n🔧 Executing {len(turn.function_calls)} tools:\n")
+                for i, call in enumerate(turn.function_calls, 1):
+                    args_str = ", ".join(f"{k}={repr(v)}" for k, v in call.arguments.items()) if call.arguments else "no args"
+                    self.output_handler(f"  {i}. {call.name}({args_str})\n")
         
         execution_results = await self.tool_executor.execute_function_calls(
             turn.function_calls,

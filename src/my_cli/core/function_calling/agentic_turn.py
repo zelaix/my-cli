@@ -489,9 +489,17 @@ class AgenticTurn:
             tool_requests.append(tool_request)
         
         try:
-            # Output tool execution start
+            # Output tool execution start with detailed info
             if self.context.output_handler:
-                self.context.output_handler(f"\n🔧 Executing {len(tool_requests)} tools...\n")
+                if len(tool_requests) == 1:
+                    req = tool_requests[0]
+                    args_str = ", ".join(f"{k}={repr(v)}" for k, v in req.args.items()) if req.args else "no args"
+                    self.context.output_handler(f"\n🔧 Executing tool: {req.name}({args_str})\n")
+                else:
+                    self.context.output_handler(f"\n🔧 Executing {len(tool_requests)} tools:\n")
+                    for i, req in enumerate(tool_requests, 1):
+                        args_str = ", ".join(f"{k}={repr(v)}" for k, v in req.args.items()) if req.args else "no args"
+                        self.context.output_handler(f"  {i}. {req.name}({args_str})\n")
             
             # Schedule tool executions
             logger.info(f"Scheduling {len(tool_requests)} tool requests")

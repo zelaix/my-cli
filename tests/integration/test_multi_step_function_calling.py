@@ -73,7 +73,12 @@ async def test_multi_step_function_calling():
             return True  # Auto-confirm all tools for testing
     
     config = SimpleConfig()
-    orchestrator = AgenticOrchestrator(content_generator, tool_registry, config)
+    
+    # Create output handler to see tool execution messages
+    def output_handler(message):
+        print(message, end="")
+    
+    orchestrator = AgenticOrchestrator(content_generator, tool_registry, config, output_handler=output_handler)
     print("✅ Orchestrator created")
     
     # Test multi-step conversation
