@@ -23,6 +23,10 @@ from .core import (
     WriteFileTool,
     EditFileTool
 )
+from .search import (
+    GrepTool,
+    GlobTool
+)
 
 logger = logging.getLogger(__name__)
 
@@ -246,13 +250,15 @@ class ToolRegistry:
         """
         discovered_count = 0
         
-        # Register the 5 core tools
+        # Register the core tools
         builtin_tools = [
             (ReadFileTool, "Reads file contents with pagination support"),
             (ShellTool, "Executes shell commands with safety confirmation"),
             (ListDirectoryTool, "Lists directory contents with filtering"),
             (WriteFileTool, "Writes files with atomic operations and backup"),
-            (EditFileTool, "Edits files with diff preview and precise modifications")
+            (EditFileTool, "Edits files with diff preview and precise modifications"),
+            (GrepTool, "Searches for patterns within file contents using regex"),
+            (GlobTool, "Finds files matching glob patterns")
         ]
         
         for tool_class, description in builtin_tools:
