@@ -130,7 +130,7 @@ def format_tools_for_provider(
     Format function declarations for specific AI provider.
     
     Args:
-        function_declarations: List of function declarations
+        function_declarations: List of function declarations (Gemini format)
         provider: Provider name ('gemini', 'kimi', etc.)
         
     Returns:
@@ -139,11 +139,13 @@ def format_tools_for_provider(
     if provider.lower() == 'gemini':
         return format_tools_for_gemini_api(function_declarations)
     elif provider.lower() == 'kimi':
-        # Kimi might use different format - to be implemented
-        return function_declarations
+        # Convert Gemini declarations to Kimi/OpenAI format
+        from .kimi_schema_generator import convert_gemini_to_kimi_schema, format_tools_for_kimi_api
+        kimi_schemas = [convert_gemini_to_kimi_schema(decl) for decl in function_declarations]
+        return format_tools_for_kimi_api(kimi_schemas)
     else:
-        # Default format for unknown providers
-        return function_declarations
+        # Default format for unknown providers (use Gemini format)
+        return format_tools_for_gemini_api(function_declarations)
 
 
 # Backward compatibility aliases

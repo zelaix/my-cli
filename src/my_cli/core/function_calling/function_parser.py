@@ -34,9 +34,9 @@ def parse_function_calls(response_content: Any) -> List[FunctionCallRequest]:
     
     Supports multiple formats:
     - Gemini native function calls (in candidates[0].content.parts)
-    - OpenAI-style tool_calls
+    - Kimi/OpenAI-style tool_calls (in choices[0].message.tool_calls)
     - Legacy function_call format
-    - Text-based function calls
+    - Text-based function calls with special markers
     
     Args:
         response_content: AI response content (format varies by provider)
@@ -46,8 +46,32 @@ def parse_function_calls(response_content: Any) -> List[FunctionCallRequest]:
     """
     function_calls = []
     
+    # Handle Kimi/OpenAI response format first (choices-based)
+    if hasattr(response_content, 'choices') and response_content.choices:
+        # Object format - has choices attribute
+        for choice in response_content.choices:
+            if hasattr(choice, 'message') and choice.message:
+                message = choice.message
+                # Check for tool_calls in message
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    for tool_call in message.tool_calls:
+                        call = _parse_openai_tool_call(tool_call)
+                        if call:
+                            function_calls.append(call)
+    
+    # Handle dictionary format with choices (Kimi response)
+    elif isinstance(response_content, dict) and 'choices' in response_content:
+        for choice in response_content['choices']:
+            if isinstance(choice, dict) and 'message' in choice:
+                message = choice['message']
+                if isinstance(message, dict) and 'tool_calls' in message:
+                    for tool_call in message['tool_calls']:
+                        call = _parse_openai_tool_call(tool_call)
+                        if call:
+                            function_calls.append(call)
+    
     # Handle Gemini native response format
-    if hasattr(response_content, 'candidates') and response_content.candidates:
+    elif hasattr(response_content, 'candidates') and response_content.candidates:
         # Object format - has candidates attribute
         for candidate in response_content.candidates:
             if hasattr(candidate, 'content') and candidate.content:
@@ -202,11 +226,23 @@ def _parse_single_function_call(function_call: Any) -> Optional[FunctionCallRequ
         return None
 
 
-def _parse_tool_call(tool_call: Any) -> Optional[FunctionCallRequest]:
-    """Parse a tool call object."""
+def _parse_openai_tool_call(tool_call: Any) -> Optional[FunctionCallRequest]:
+    """
+    Parse an OpenAI-style tool call (used by Kimi and other providers).
+    
+    OpenAI/Kimi tool calls have this format:
+    {
+        "id": "call_abc123",
+        "type": "function",
+        "function": {
+            "name": "function_name",
+            "arguments": '{"param1": "value1", "param2": "value2"}'
+        }
+    }
+    """
     try:
         if hasattr(tool_call, 'id') and hasattr(tool_call, 'function'):
-            # OpenAI-style tool call
+            # Object format
             call_id = tool_call.id
             function = tool_call.function
             name = function.name
@@ -223,7 +259,7 @@ def _parse_tool_call(tool_call: Any) -> Optional[FunctionCallRequest]:
         if not name:
             return None
         
-        # Parse arguments JSON
+        # Parse arguments JSON string
         try:
             arguments = json.loads(arguments_str) if isinstance(arguments_str, str) else arguments_str
         except json.JSONDecodeError:
@@ -241,21 +277,61 @@ def _parse_tool_call(tool_call: Any) -> Optional[FunctionCallRequest]:
         return None
 
 
+def _parse_tool_call(tool_call: Any) -> Optional[FunctionCallRequest]:
+    """Parse a tool call object (legacy function, now delegates to OpenAI parser)."""
+    return _parse_openai_tool_call(tool_call)
+
+
 def _parse_text_function_calls(text: str) -> List[FunctionCallRequest]:
     """
     Parse function calls from text format (for providers that return text).
     
-    Looks for patterns like:
-    <function_call name="tool_name">{"param": "value"}</function_call>
-    or
-    ```function_call
-    name: tool_name
-    arguments: {"param": "value"}
-    ```
+    Supports multiple patterns:
+    1. Kimi K2 special markers:
+       <|tool_calls_section_begin|>
+       <|tool_call_begin|>{"name": "tool", "arguments": {...}}<|tool_call_end|>
+       <|tool_calls_section_end|>
+    
+    2. XML-style function calls:
+       <function_call name="tool_name">{"param": "value"}</function_call>
+    
+    3. Code block style:
+       ```function_call
+       name: tool_name
+       arguments: {"param": "value"}
+       ```
     """
     function_calls = []
     
-    # Pattern 1: XML-style function calls
+    # Pattern 1: Kimi K2 special markers
+    kimi_section_pattern = r'<\|tool_calls_section_begin\|>(.*?)<\|tool_calls_section_end\|>'
+    kimi_call_pattern = r'<\|tool_call_begin\|>(.*?)<\|tool_call_end\|>'
+    
+    # Look for tool calls sections
+    for section_match in re.finditer(kimi_section_pattern, text, re.DOTALL):
+        section_content = section_match.group(1)
+        
+        # Parse individual tool calls within the section
+        for call_match in re.finditer(kimi_call_pattern, section_content, re.DOTALL):
+            call_content = call_match.group(1).strip()
+            
+            try:
+                call_data = json.loads(call_content)
+                name = call_data.get('name')
+                arguments = call_data.get('arguments', {})
+                
+                if name:
+                    function_calls.append(FunctionCallRequest(
+                        id=f"kimi_call_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(function_calls):04d}",
+                        name=name,
+                        arguments=arguments,
+                        raw_arguments=json.dumps(arguments),
+                        timestamp=datetime.now()
+                    ))
+            except json.JSONDecodeError:
+                continue
+    
+    # Pattern 2: XML-style function calls
     xml_pattern = r'<function_call\s+name="([^"]+)"\s*>([^<]*)</function_call>'
     for match in re.finditer(xml_pattern, text, re.DOTALL):
         name = match.group(1)
@@ -274,7 +350,7 @@ def _parse_text_function_calls(text: str) -> List[FunctionCallRequest]:
             timestamp=datetime.now()
         ))
     
-    # Pattern 2: Code block style function calls
+    # Pattern 3: Code block style function calls
     code_pattern = r'```function_call\s*\nname:\s*([^\n]+)\narguments:\s*([^`]*?)```'
     for match in re.finditer(code_pattern, text, re.DOTALL):
         name = match.group(1).strip()

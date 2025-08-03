@@ -63,10 +63,22 @@ class AgenticOrchestrator:
         self.confirmation_handler = confirmation_handler
         self.output_handler = output_handler
         
-        # Generate tools for AI
-        from .gemini_schema_generator import generate_all_gemini_function_declarations, format_tools_for_gemini_api
-        self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
-        self.gemini_tools = format_tools_for_gemini_api(self.function_schemas)
+        # Generate tools for AI - detect provider and use appropriate format
+        self.provider = self._detect_provider(content_generator)
+        
+        if self.provider == "gemini":
+            from .gemini_schema_generator import generate_all_gemini_function_declarations, format_tools_for_gemini_api
+            self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
+            self.formatted_tools = format_tools_for_gemini_api(self.function_schemas)
+        elif self.provider == "kimi":
+            from .kimi_schema_generator import generate_all_kimi_function_schemas, format_tools_for_kimi_api
+            self.function_schemas = generate_all_kimi_function_schemas(tool_registry)
+            self.formatted_tools = format_tools_for_kimi_api(self.function_schemas)
+        else:
+            # Default to Gemini format for unknown providers
+            from .gemini_schema_generator import generate_all_gemini_function_declarations, format_tools_for_gemini_api
+            self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
+            self.formatted_tools = format_tools_for_gemini_api(self.function_schemas)
         
         # Conversation state
         self.conversation_history: List[Message] = []
@@ -77,7 +89,32 @@ class AgenticOrchestrator:
         self.total_tool_calls = 0
         self.successful_tool_calls = 0
         
-        logger.info(f"Initialized agentic orchestrator with {len(self.function_schemas)} tools")
+        logger.info(f"Initialized agentic orchestrator with {len(self.function_schemas)} tools for {self.provider} provider")
+    
+    def _detect_provider(self, content_generator) -> str:
+        """Detect the provider from the content generator."""
+        # Check if it's a Kimi generator
+        if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'kimi_provider'):
+            return "kimi"
+        
+        # Check model name patterns
+        if hasattr(content_generator, 'model'):
+            model = content_generator.model.lower()
+            if model.startswith('kimi-'):
+                return "kimi"
+            elif model.startswith('gemini-'):
+                return "gemini"
+        
+        # Check config model
+        if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'model'):
+            model = content_generator.config.model.lower()
+            if model.startswith('kimi-'):
+                return "kimi"
+            elif model.startswith('gemini-'):
+                return "gemini"
+        
+        # Default to gemini
+        return "gemini"
     
     async def send_message(
         self,
@@ -114,7 +151,7 @@ class AgenticOrchestrator:
             model=self.content_generator.model,
             content_generator=self.content_generator,
             tool_registry=self.tool_registry,
-            tools=self.gemini_tools,
+            tools=self.formatted_tools,
             system_instruction=system_instruction,
             confirmation_handler=self.confirmation_handler,
             output_handler=self.output_handler

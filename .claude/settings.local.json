@@ -17,7 +17,23 @@
       "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python test_function_calling.py)",
       "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python test_multi_step_function_calling.py)",
       "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_conversation_history.py)",
-      "Bash(export MY_CLI_API_KEY=$MY_CLI_API_KEY)"
+      "Bash(export MY_CLI_API_KEY=$MY_CLI_API_KEY)",
+      "WebFetch(domain:platform.moonshot.ai)",
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_tool_count.py)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_cli_flow.py)",
+      "Bash(MY_CLI_API_KEY=$MY_CLI_API_KEY python debug_kimi_streaming.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_kimi_streaming.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_cli_flow.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 10s my-cli chat --model kimi-k2-instruct \"list the current directory\")",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-instruct \"list the current directory\")",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_id_flow.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 10s python debug_cli_flow.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_tool_schema.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_raw_streaming.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY python debug_non_streaming.py)",
+      "Bash(MY_CLI_KIMI_API_KEY=$MY_CLI_KIMI_API_KEY timeout 15s my-cli chat --model kimi-k2-base \"list the current directory\")"
     ],
     "deny": []
   }

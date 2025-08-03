@@ -37,7 +37,10 @@ logger = logging.getLogger(__name__)
 class OpenAIMessage(BaseModel):
     """OpenAI-compatible message format."""
     role: str
-    content: str
+    content: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
 
 
 class OpenAIRequest(BaseModel):
@@ -49,6 +52,8 @@ class OpenAIRequest(BaseModel):
     top_p: Optional[float] = None
     stop: Optional[List[str]] = None
     stream: bool = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[str] = None
 
 
 class OpenAIChoice(BaseModel):
@@ -173,18 +178,20 @@ class KimiContentGenerator(BaseContentGenerator):
     async def generate_content(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> GenerateContentResponse:
         """Generate content using Kimi API."""
         if not self._initialized:
             await self.initialize()
         
         try:
-            # Convert messages to OpenAI format
-            openai_messages = self._convert_messages_to_openai(messages)
+            # Convert messages to OpenAI format with system instruction
+            openai_messages = self._convert_messages_to_openai(messages, system_instruction)
             
             # Create request
-            request = self._create_request(openai_messages, stream=False, config=config)
+            request = self._create_request(openai_messages, stream=False, config=config, tools=tools)
             
             # Execute with retry logic
             response = await self.retry_manager.retry(
@@ -202,18 +209,20 @@ class KimiContentGenerator(BaseContentGenerator):
     async def generate_content_stream(
         self,
         messages: List[Message],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system_instruction: Optional[str] = None
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Generate content with streaming response."""
         if not self._initialized:
             await self.initialize()
         
         try:
-            # Convert messages to OpenAI format
-            openai_messages = self._convert_messages_to_openai(messages)
+            # Convert messages to OpenAI format with system instruction
+            openai_messages = self._convert_messages_to_openai(messages, system_instruction)
             
             # Create streaming request
-            request = self._create_request(openai_messages, stream=True, config=config)
+            request = self._create_request(openai_messages, stream=True, config=config, tools=tools)
             
             # Execute streaming request
             async for chunk in self._generate_content_stream_impl(request):
@@ -265,19 +274,30 @@ class KimiContentGenerator(BaseContentGenerator):
     ) -> AsyncGenerator[GenerateContentResponse, None]:
         """Internal implementation of streaming content generation."""
         try:
-            async with self._client.stream(
-                "POST",
+            # Make streaming request with proper headers
+            response = await self._client.post(
                 "/chat/completions",
-                json=request.model_dump(exclude_none=True)
-            ) as response:
-                response.raise_for_status()
+                json=request.model_dump(exclude_none=True),
+                headers={"Accept": "text/event-stream"}
+            )
+            response.raise_for_status()
+            
+            # Read streaming response content properly
+            buffer = ""
+            async for chunk in response.aiter_bytes(chunk_size=1024):
+                chunk_text = chunk.decode('utf-8', errors='ignore')
+                buffer += chunk_text
                 
-                async for line in response.aiter_lines():
+                # Process complete lines
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    line = line.strip()
+                    
                     if line.startswith("data: "):
                         data = line[6:]  # Remove "data: " prefix
                         
                         if data.strip() == "[DONE]":
-                            break
+                            return
                         
                         try:
                             chunk_data = json.loads(data)
@@ -292,23 +312,123 @@ class KimiContentGenerator(BaseContentGenerator):
         except Exception as e:
             raise classify_error(e)
     
-    def _convert_messages_to_openai(self, messages: List[Message]) -> List[OpenAIMessage]:
+    def _convert_messages_to_openai(
+        self, 
+        messages: List[Message], 
+        system_instruction: Optional[str] = None
+    ) -> List[OpenAIMessage]:
         """Convert internal message format to OpenAI format."""
         openai_messages = []
+        
+        # Add system instruction as first message if provided
+        if system_instruction:
+            openai_messages.append(OpenAIMessage(
+                role="system",
+                content=system_instruction
+            ))
         
         for message in messages:
             # Map roles
             role_map = {
                 MessageRole.USER: "user",
                 MessageRole.MODEL: "assistant",
-                MessageRole.SYSTEM: "system"
+                MessageRole.SYSTEM: "system",
+                MessageRole.TOOL: "tool"
             }
             
             role = role_map.get(message.role, "user")
-            content = message.get_text_content()
             
-            if content.strip():
-                openai_messages.append(OpenAIMessage(role=role, content=content))
+            # Handle different message types
+            if message.role == MessageRole.TOOL:
+                # Tool response message
+                tool_call_id = None
+                tool_name = None
+                
+                # Extract tool call ID and name from message parts
+                for part in message.parts:
+                    if part.function_response:
+                        func_resp = part.function_response
+                        tool_call_id = func_resp.get('id')
+                        tool_name = func_resp.get('name')
+                        break
+                
+                content = message.get_text_content()
+                openai_messages.append(OpenAIMessage(
+                    role="tool",
+                    content=content,
+                    tool_call_id=tool_call_id,
+                    name=tool_name
+                ))
+            
+            elif message.role == MessageRole.MODEL:
+                # Check if this is a model message with function calls
+                content = message.get_text_content()
+                tool_calls = []
+                
+                # Look for function calls in message parts
+                for part in message.parts:
+                    if part.function_call:
+                        func_call = part.function_call
+                        # CRITICAL FIX: Preserve the original ID from the function call
+                        # This ensures tool responses can reference the correct tool_call_id
+                        original_id = func_call.get('id')
+                        if not original_id:
+                            # Only generate ID if none exists
+                            original_id = f"call_{hash(str(func_call)) % 100000:05d}"
+                        
+                        tool_call = {
+                            "id": original_id,
+                            "type": "function",
+                            "function": {
+                                "name": func_call.get('name', ''),
+                                "arguments": json.dumps(func_call.get('args', {}))
+                            }
+                        }
+                        tool_calls.append(tool_call)
+                
+                openai_messages.append(OpenAIMessage(
+                    role="assistant",
+                    content=content if content.strip() else None,
+                    tool_calls=tool_calls if tool_calls else None
+                ))
+            
+            else:
+                # Check if this is a USER message with function responses (tool results)
+                if message.role == MessageRole.USER:
+                    # Check if this USER message contains function responses
+                    has_function_responses = any(part.function_response for part in message.parts)
+                    
+                    if has_function_responses:
+                        # This is a tool result message, convert each function_response to tool message
+                        for part in message.parts:
+                            if part.function_response:
+                                func_resp = part.function_response
+                                tool_call_id = func_resp.get('id')
+                                tool_name = func_resp.get('name')
+                                
+                                # Extract content from function response
+                                response_data = func_resp.get('response', {})
+                                if isinstance(response_data, dict):
+                                    content = response_data.get('output', str(response_data))
+                                else:
+                                    content = str(response_data)
+                                
+                                openai_messages.append(OpenAIMessage(
+                                    role="tool",
+                                    content=content,
+                                    tool_call_id=tool_call_id,
+                                    name=tool_name
+                                ))
+                    else:
+                        # Regular user message
+                        content = message.get_text_content()
+                        if content.strip():
+                            openai_messages.append(OpenAIMessage(role=role, content=content))
+                else:
+                    # Regular system message
+                    content = message.get_text_content()
+                    if content.strip():
+                        openai_messages.append(OpenAIMessage(role=role, content=content))
         
         return openai_messages
     
@@ -349,7 +469,8 @@ class KimiContentGenerator(BaseContentGenerator):
         self,
         messages: List[OpenAIMessage],
         stream: bool = False,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> OpenAIRequest:
         """Create an OpenAI-compatible request."""
         # Map internal model name to provider-specific name
@@ -362,7 +483,9 @@ class KimiContentGenerator(BaseContentGenerator):
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             top_p=self.config.top_p,
-            stop=self.config.stop_sequences
+            stop=self.config.stop_sequences,
+            tools=tools,
+            tool_choice="auto" if tools else None
         )
         
         # Apply any config overrides
@@ -378,15 +501,41 @@ class KimiContentGenerator(BaseContentGenerator):
         candidates = []
         
         for choice in openai_response.choices:
-            if choice.message and choice.message.content:
-                candidate = GenerationCandidate(
-                    content={
-                        "role": "model",
-                        "parts": [{"text": choice.message.content}]
-                    },
-                    finish_reason=choice.finish_reason
-                )
-                candidates.append(candidate)
+            if choice.message:
+                parts = []
+                
+                # Add text content if available
+                if choice.message.content:
+                    parts.append({"text": choice.message.content})
+                
+                # Add tool calls if available
+                if hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                    for tool_call in choice.message.tool_calls:
+                        if isinstance(tool_call, dict) and 'function' in tool_call:
+                            function = tool_call['function']
+                            # Convert arguments from JSON string to dict
+                            try:
+                                args = json.loads(function['arguments']) if isinstance(function['arguments'], str) else function['arguments']
+                            except json.JSONDecodeError:
+                                args = {}
+                            
+                            parts.append({
+                                "function_call": {
+                                    "name": function['name'],
+                                    "args": args
+                                }
+                            })
+                
+                # Only create candidate if we have content
+                if parts:
+                    candidate = GenerationCandidate(
+                        content={
+                            "role": "model",
+                            "parts": parts
+                        },
+                        finish_reason=choice.finish_reason
+                    )
+                    candidates.append(candidate)
         
         usage_metadata = None
         if openai_response.usage:
@@ -408,17 +557,50 @@ class KimiContentGenerator(BaseContentGenerator):
         
         if "choices" in chunk_data:
             for choice in chunk_data["choices"]:
-                if "delta" in choice and "content" in choice["delta"]:
-                    content_text = choice["delta"]["content"]
-                    if content_text:
-                        candidate = GenerationCandidate(
-                            content={
-                                "role": "model",
-                                "parts": [{"text": content_text}]
-                            },
-                            finish_reason=choice.get("finish_reason")
-                        )
-                        candidates.append(candidate)
+                delta = choice.get("delta", {})
+                parts = []
+                
+                # Handle text content
+                if "content" in delta and delta["content"]:
+                    parts.append({"text": delta["content"]})
+                
+                # For streaming tool calls, we need to buffer them until complete
+                # This is a simplified approach - we'll only yield complete function calls
+                # when we have both name and arguments
+                if "tool_calls" in delta and delta["tool_calls"]:
+                    for tool_call in delta["tool_calls"]:
+                        if isinstance(tool_call, dict) and 'function' in tool_call:
+                            function = tool_call['function']
+                            function_name = function.get('name', '')
+                            function_args = function.get('arguments', '')
+                            
+                            # Only process if we have a complete function call
+                            # (has name and arguments that can be parsed as JSON)
+                            if function_name.strip() and function_args.strip():
+                                try:
+                                    # Try to parse arguments as complete JSON
+                                    args = json.loads(function_args)
+                                    
+                                    parts.append({
+                                        "function_call": {
+                                            "name": function_name,
+                                            "args": args
+                                        }
+                                    })
+                                except json.JSONDecodeError:
+                                    # Arguments are incomplete, skip this chunk
+                                    continue
+                
+                # Create candidate if we have content
+                if parts:
+                    candidate = GenerationCandidate(
+                        content={
+                            "role": "model",
+                            "parts": parts
+                        },
+                        finish_reason=choice.get("finish_reason")
+                    )
+                    candidates.append(candidate)
         
         return GenerateContentResponse(
             candidates=candidates,

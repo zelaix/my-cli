@@ -342,65 +342,45 @@ class AgenticTurn:
                         fr = part.function_response
                         logger.info(f"    Part {j+1}: function_response id={fr.get('id')} name={fr.get('name')}")
             
-            # Stream AI response
-            async for chunk in self.context.content_generator.generate_content_stream(
-                messages,
-                tools=self.context.tools,
-                system_instruction=self.context.system_instruction
-            ):
-                # Check for abort
-                if abort_signal and abort_signal.is_set():
-                    cancel_event = UserCancelledEvent(value="User aborted")
-                    await self._emit_event(cancel_event)
-                    yield cancel_event
-                    return
-                
-                # Store debug response
-                self.debug_responses.append(chunk)
-                
-                # Process thought if present
-                if hasattr(chunk, 'candidates') and chunk.candidates:
-                    candidate = chunk.candidates[0]
-                    if hasattr(candidate, 'content') and candidate.content:
-                        parts = candidate.content.get('parts', [])
-                        for part in parts:
-                            if isinstance(part, dict) and 'thought' in part:
-                                thought_event = self._extract_thought_event(part)
-                                if thought_event:
-                                    await self._emit_event(thought_event)
-                                    yield thought_event
-                                continue
-                
-                # Process text content
-                if chunk.has_content and chunk.text:
-                    content_event = create_content_event(chunk.text)
-                    await self._emit_event(content_event)
-                    yield content_event
-                    
-                    # Output to handler if available
-                    if self.context.output_handler:
-                        self.context.output_handler(chunk.text)
-                
-                # Process function calls (matching original Gemini CLI pattern) 
-                if chunk.function_calls:
-                    for function_call in chunk.function_calls:
-                        event = self._handle_function_call(function_call)
-                        if event:
-                            await self._emit_event(event)
+            # For Kimi provider with tools, use non-streaming to avoid argument fragmentation
+            # Streaming with Kimi fragments tool arguments across multiple chunks
+            use_streaming = True
+            if (hasattr(self.context.content_generator, 'provider') and 
+                self.context.content_generator.provider.value == 'kimi' and 
+                self.context.tools):
+                use_streaming = False
+            
+            try:
+                if use_streaming:
+                    # Stream AI response
+                    async for chunk in self.context.content_generator.generate_content_stream(
+                        messages,
+                        tools=self.context.tools,
+                        system_instruction=self.context.system_instruction
+                    ):
+                        async for event in self._process_chunk(chunk, abort_signal, is_continuation):
                             yield event
-                
-                # Check for finish reason
-                if hasattr(chunk, 'candidates') and chunk.candidates:
-                    candidate = chunk.candidates[0]
-                    if hasattr(candidate, 'finish_reason') and candidate.finish_reason:
-                        self.finish_reason = candidate.finish_reason
-                        finished_event = create_finished_event({
-                            "finish_reason": candidate.finish_reason,
-                            "is_continuation": is_continuation
-                        })
-                        await self._emit_event(finished_event)
-                        yield finished_event
-                        return
+                            if abort_signal and abort_signal.is_set():
+                                return
+                else:
+                    # Use non-streaming for Kimi with tools to preserve arguments
+                    response = await self.context.content_generator.generate_content(
+                        messages,
+                        tools=self.context.tools,
+                        system_instruction=self.context.system_instruction
+                    )
+                    async for event in self._process_non_streaming_response(response, is_continuation):
+                        yield event
+            
+            except Exception as e:
+                logger.error(f"Error processing AI stream: {e}")
+                error_event = create_error_event(
+                    message=f"Stream processing error: {str(e)}",
+                    details={"turn_id": self.id}
+                )
+                await self._emit_event(error_event)
+                yield error_event
+                raise
         
         except Exception as e:
             logger.error(f"Error processing AI stream: {e}")
@@ -411,6 +391,99 @@ class AgenticTurn:
             await self._emit_event(error_event)
             yield error_event
             raise
+    
+    async def _process_chunk(self, chunk, abort_signal, is_continuation):
+        """Process a streaming chunk."""
+        # Check for abort
+        if abort_signal and abort_signal.is_set():
+            cancel_event = UserCancelledEvent(value="User aborted")
+            await self._emit_event(cancel_event)
+            yield cancel_event
+            return
+        
+        # Store debug response
+        self.debug_responses.append(chunk)
+        
+        # Process thought if present
+        if hasattr(chunk, 'candidates') and chunk.candidates:
+            candidate = chunk.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                parts = candidate.content.get('parts', [])
+                for part in parts:
+                    if isinstance(part, dict) and 'thought' in part:
+                        thought_event = self._extract_thought_event(part)
+                        if thought_event:
+                            await self._emit_event(thought_event)
+                            yield thought_event
+                        continue
+        
+        # Process text content
+        if chunk.has_content and chunk.text:
+            content_event = create_content_event(chunk.text)
+            await self._emit_event(content_event)
+            yield content_event
+            
+            # Output to handler if available
+            if self.context.output_handler:
+                self.context.output_handler(chunk.text)
+        
+        # Process function calls (matching original Gemini CLI pattern) 
+        if chunk.function_calls:
+            for function_call in chunk.function_calls:
+                event = self._handle_function_call(function_call)
+                if event:
+                    await self._emit_event(event)
+                    yield event
+        
+        # Check for finish reason
+        if hasattr(chunk, 'candidates') and chunk.candidates:
+            candidate = chunk.candidates[0]
+            if hasattr(candidate, 'finish_reason') and candidate.finish_reason:
+                self.finish_reason = candidate.finish_reason
+                finished_event = create_finished_event({
+                    "finish_reason": candidate.finish_reason,
+                    "is_continuation": is_continuation
+                })
+                await self._emit_event(finished_event)
+                yield finished_event
+                return
+    
+    async def _process_non_streaming_response(self, response, is_continuation):
+        """Process a non-streaming response (used for Kimi with tools)."""
+        # Store debug response
+        self.debug_responses.append(response)
+        
+        # Process text content
+        if response.has_content and response.text:
+            content_event = create_content_event(response.text)
+            await self._emit_event(content_event)
+            yield content_event
+            
+            # Output to handler if available
+            if self.context.output_handler:
+                self.context.output_handler(response.text)
+        
+        # Process function calls
+        if response.function_calls:
+            for function_call in response.function_calls:
+                event = self._handle_function_call(function_call)
+                if event:
+                    await self._emit_event(event)
+                    yield event
+        
+        # Set finish reason from response
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'finish_reason') and candidate.finish_reason:
+                self.finish_reason = candidate.finish_reason
+        
+        # Always emit finished event for non-streaming
+        finished_event = create_finished_event({
+            "finish_reason": self.finish_reason or "stop",
+            "is_continuation": is_continuation
+        })
+        await self._emit_event(finished_event)
+        yield finished_event
     
     def _handle_function_call(self, tool_call: Dict[str, Any]) -> Optional[ToolCallRequestEvent]:
         """

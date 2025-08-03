@@ -76,20 +76,58 @@ class ConversationOrchestrator:
             output_handler=self._tool_output_handler
         )
         
-        # Generate function schemas for AI (use native Gemini format)
-        self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
-        # Convert to Gemini tools format for content generator
-        from .gemini_schema_generator import format_tools_for_gemini_api
-        self.gemini_tools = format_tools_for_gemini_api(self.function_schemas)
+        # Generate tools for AI - detect provider and use appropriate format
+        self.provider = self._detect_provider(content_generator)
         
-        # Store provider type for runtime decisions
-        self.provider_type = content_generator.provider.value
+        if self.provider == "gemini":
+            from .gemini_schema_generator import generate_all_gemini_function_declarations, format_tools_for_gemini_api
+            self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
+            self.formatted_tools = format_tools_for_gemini_api(self.function_schemas)
+        elif self.provider == "kimi":
+            from .kimi_schema_generator import generate_all_kimi_function_schemas, format_tools_for_kimi_api
+            self.function_schemas = generate_all_kimi_function_schemas(tool_registry)
+            self.formatted_tools = format_tools_for_kimi_api(self.function_schemas)
+        else:
+            # Default to Gemini format for unknown providers
+            from .gemini_schema_generator import generate_all_gemini_function_declarations, format_tools_for_gemini_api
+            self.function_schemas = generate_all_gemini_function_declarations(tool_registry)
+            self.formatted_tools = format_tools_for_gemini_api(self.function_schemas)
+        
+        # Store provider type for backward compatibility  
+        self.provider_type = self.provider
+        # Backward compatibility alias
+        self.gemini_tools = self.formatted_tools
         
         # Conversation history
         self.conversation_history: List[Message] = []
         self.conversation_turns: List[ConversationTurn] = []
         
-        logger.info(f"Initialized orchestrator with {len(self.function_schemas)} tools")
+        logger.info(f"Initialized orchestrator with {len(self.function_schemas)} tools for {self.provider} provider")
+    
+    def _detect_provider(self, content_generator) -> str:
+        """Detect the provider from the content generator."""
+        # Check if it's a Kimi generator
+        if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'kimi_provider'):
+            return "kimi"
+        
+        # Check model name patterns
+        if hasattr(content_generator, 'model'):
+            model = content_generator.model.lower()
+            if model.startswith('kimi-'):
+                return "kimi"
+            elif model.startswith('gemini-'):
+                return "gemini"
+        
+        # Check config model
+        if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'model'):
+            model = content_generator.config.model.lower()
+            if model.startswith('kimi-'):
+                return "kimi"
+            elif model.startswith('gemini-'):
+                return "gemini"
+        
+        # Default to gemini
+        return "gemini"
     
     async def send_message(
         self,

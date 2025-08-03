@@ -1,8 +1,8 @@
 """
-Function response converter for Gemini API compatibility.
+Function response converter for multi-provider API compatibility.
 
-This module provides proper conversion of tool results to Gemini's
-FunctionResponse format, matching the original convertToFunctionResponse.
+This module provides proper conversion of tool results to both Gemini's
+FunctionResponse format and Kimi/OpenAI tool response format.
 """
 
 import logging
@@ -17,6 +17,43 @@ logger = logging.getLogger(__name__)
 def create_function_response_part(
     call_id: str,
     tool_name: str,
+    output: str,
+    provider: str = "gemini"
+) -> Dict[str, Any]:
+    """
+    Create a function response part for the specified provider.
+    
+    Args:
+        call_id: Unique identifier for the tool call
+        tool_name: Name of the tool
+        output: Tool execution output
+        provider: Provider format ('gemini' or 'kimi')
+        
+    Returns:
+        Function response formatted for the provider
+    """
+    if provider.lower() == "kimi":
+        # Kimi/OpenAI uses a different format for tool responses
+        return {
+            "role": "tool",
+            "content": output,
+            "tool_call_id": call_id,
+            "name": tool_name
+        }
+    else:
+        # Gemini format (default)
+        return {
+            "function_response": {
+                "id": call_id,
+                "name": tool_name,
+                "response": {"output": output}
+            }
+        }
+
+
+def create_gemini_function_response_part(
+    call_id: str,
+    tool_name: str,
     output: str
 ) -> Dict[str, Any]:
     """
@@ -24,33 +61,42 @@ def create_function_response_part(
     
     Matches the original createFunctionResponsePart function.
     """
-    return {
-        "function_response": {
-            "id": call_id,
-            "name": tool_name,
-            "response": {"output": output}
-        }
-    }
+    return create_function_response_part(call_id, tool_name, output, "gemini")
+
+
+def create_kimi_tool_response_message(
+    call_id: str,
+    tool_name: str,
+    output: str
+) -> Dict[str, Any]:
+    """
+    Create a tool response message for Kimi/OpenAI API.
+    
+    Kimi expects tool responses as separate messages with role='tool'.
+    """
+    return create_function_response_part(call_id, tool_name, output, "kimi")
 
 
 def convert_to_function_response(
     tool_name: str,
     call_id: str,
-    llm_content: Any
+    llm_content: Any,
+    provider: str = "gemini"
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Convert tool result content to Gemini FunctionResponse format.
+    Convert tool result content to provider-specific function response format.
     
-    This matches the original convertToFunctionResponse function exactly,
-    handling all the various content types that can be returned from tools.
+    This handles all the various content types that can be returned from tools
+    and formats them appropriately for the specified provider.
     
     Args:
         tool_name: Name of the tool that was executed
         call_id: Unique identifier for the tool call
         llm_content: Content returned by the tool (various formats)
+        provider: Provider format ('gemini' or 'kimi')
         
     Returns:
-        Properly formatted function response for Gemini API
+        Properly formatted function response for the specified provider
     """
     # Handle the content conversion logic from original
     content_to_process = llm_content
@@ -61,14 +107,15 @@ def convert_to_function_response(
     
     # Handle string content (most common case)
     if isinstance(content_to_process, str):
-        return create_function_response_part(call_id, tool_name, content_to_process)
+        return create_function_response_part(call_id, tool_name, content_to_process, provider)
     
     # Handle list of content parts
     if isinstance(content_to_process, list):
         function_response = create_function_response_part(
             call_id,
             tool_name,
-            "Tool execution succeeded."
+            "Tool execution succeeded.",
+            provider
         )
         # Return function response plus the content parts
         return [function_response] + content_to_process
@@ -86,7 +133,7 @@ def convert_to_function_response(
                     for part in content_parts:
                         if isinstance(part, dict) and "text" in part:
                             text_content += part["text"]
-                    return create_function_response_part(call_id, tool_name, text_content)
+                    return create_function_response_part(call_id, tool_name, text_content, provider)
             # Pass through as-is if properly formatted
             return content_to_process
         
@@ -100,7 +147,8 @@ def convert_to_function_response(
             function_response = create_function_response_part(
                 call_id,
                 tool_name,
-                f"Binary content of type {mime_type} was processed."
+                f"Binary content of type {mime_type} was processed.",
+                provider
             )
             return [function_response, content_to_process]
         
@@ -109,19 +157,21 @@ def convert_to_function_response(
             return create_function_response_part(
                 call_id, 
                 tool_name, 
-                content_to_process["text"]
+                content_to_process["text"],
+                provider
             )
     
     # Handle ToolResult objects
     if isinstance(content_to_process, ToolResult):
         output_text = content_to_process.llm_content or "Tool execution succeeded."
-        return create_function_response_part(call_id, tool_name, output_text)
+        return create_function_response_part(call_id, tool_name, output_text, provider)
     
     # Default case for unknown content types
     return create_function_response_part(
         call_id,
         tool_name,
-        "Tool execution succeeded."
+        "Tool execution succeeded.",
+        provider
     )
 
 
@@ -271,3 +321,81 @@ def format_tool_results_for_continuation(
             message_parts.append(MessagePart(function_response=basic_response))
     
     return message_parts
+
+
+def detect_provider_from_content_generator(content_generator) -> str:
+    """
+    Detect the provider from a content generator instance.
+    
+    Args:
+        content_generator: Content generator instance
+        
+    Returns:
+        Provider name ('gemini' or 'kimi')
+    """
+    # Check if it's a Kimi generator
+    if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'kimi_provider'):
+        return "kimi"
+    
+    # Check model name patterns
+    if hasattr(content_generator, 'model'):
+        model = content_generator.model.lower()
+        if model.startswith('kimi-'):
+            return "kimi"
+        elif model.startswith('gemini-'):
+            return "gemini"
+    
+    # Check config model
+    if hasattr(content_generator, 'config') and hasattr(content_generator.config, 'model'):
+        model = content_generator.config.model.lower()
+        if model.startswith('kimi-'):
+            return "kimi"
+        elif model.startswith('gemini-'):
+            return "gemini"
+    
+    # Default to gemini
+    return "gemini"
+
+
+def convert_to_provider_response(
+    tool_name: str,
+    call_id: str,
+    llm_content: Any,
+    content_generator
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Convert tool result content to provider-specific format automatically.
+    
+    This is a convenience function that auto-detects the provider and
+    formats the response appropriately.
+    
+    Args:
+        tool_name: Name of the tool that was executed
+        call_id: Unique identifier for the tool call
+        llm_content: Content returned by the tool
+        content_generator: Content generator instance to detect provider
+        
+    Returns:
+        Properly formatted function response for the detected provider
+    """
+    provider = detect_provider_from_content_generator(content_generator)
+    return convert_to_function_response(tool_name, call_id, llm_content, provider)
+
+
+# Backward compatibility functions
+def convert_to_gemini_function_response(
+    tool_name: str,
+    call_id: str,
+    llm_content: Any
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Backward compatibility function for Gemini format."""
+    return convert_to_function_response(tool_name, call_id, llm_content, "gemini")
+
+
+def convert_to_kimi_tool_response(
+    tool_name: str,
+    call_id: str,
+    llm_content: Any
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    """Convert tool result to Kimi/OpenAI tool response format."""
+    return convert_to_function_response(tool_name, call_id, llm_content, "kimi")
